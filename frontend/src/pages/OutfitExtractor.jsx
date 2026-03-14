@@ -363,8 +363,8 @@ export default function OutfitExtractor() {
                     
                     <div className="glass-card p-4 mb-8">
                       <p className="text-xs text-zinc-400">
-                        <span className="text-primary font-semibold">Note:</span> Image processing is MOCKED. 
-                        In production, Fal.ai will provide actual segmentation and part extraction.
+                        <span className="text-primary font-semibold">AI Powered:</span> Using Gemini Nano Banana 
+                        for image generation. Processing may take up to 60 seconds.
                       </p>
                     </div>
                     

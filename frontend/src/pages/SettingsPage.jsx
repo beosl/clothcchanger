@@ -243,12 +243,12 @@ export default function SettingsPage() {
               <div className="flex gap-4">
                 <Info className="w-6 h-6 text-primary flex-shrink-0" />
                 <div>
-                  <h3 className="font-medium mb-2">About Processing</h3>
+                  <h3 className="font-medium mb-2">AI Processing</h3>
                   <p className="text-sm text-zinc-400">
                     This system uses <span className="text-primary font-semibold">GPT-5.2</span> as the 
-                    workflow controller and <span className="text-secondary font-semibold">Fal.ai</span> for 
-                    image processing. Currently running in <span className="text-amber-500">MOCK MODE</span> - 
-                    provide a FAL_KEY in the backend .env to enable real AI processing.
+                    workflow controller and <span className="text-secondary font-semibold">Gemini Nano Banana</span> for 
+                    AI image generation. Image generation may take up to 60 seconds. All processing uses
+                    your Emergent Universal Key balance.
                   </p>
                 </div>
               </div>

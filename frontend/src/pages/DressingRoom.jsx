@@ -104,6 +104,7 @@ export default function DressingRoom() {
     }
 
     setProcessing(true);
+    toast.info("AI generating new image... This may take up to 60 seconds", { duration: 5000 });
     try {
       const result = await api.applyDressing({
         character_id: selectedCharacter.id,
@@ -115,7 +116,7 @@ export default function DressingRoom() {
       toast.success("Outfit applied successfully!");
     } catch (error) {
       console.error("Dressing failed:", error);
-      toast.error("Failed to apply outfit");
+      toast.error("Failed to apply outfit. Please try again.");
     }
     setProcessing(false);
   };

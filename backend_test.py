@@ -28,10 +28,15 @@ class AIDressingRoomTester:
             response = requests.get(f"{self.api_url}/health", timeout=10)
             if response.status_code == 200:
                 data = response.json()
+                # Check for Gemini Nano Banana image engine
+                image_engine = data.get('image_engine', '')
+                expected_engine = "Gemini Nano Banana"
+                engine_match = image_engine == expected_engine
+                
                 return self.log_test(
-                    "Health Check", 
-                    True,
-                    f"Status: {data.get('status')}, LLM: {data.get('llm_configured')}, FAL: {data.get('fal_configured')}"
+                    "Health Check with Gemini Nano Banana", 
+                    engine_match and data.get('status') == 'healthy',
+                    f"Status: {data.get('status')}, LLM: {data.get('llm_configured')}, Image Engine: {image_engine} (Expected: {expected_engine})"
                 )
             else:
                 return self.log_test("Health Check", False, f"Status {response.status_code}")
@@ -129,7 +134,7 @@ class AIDressingRoomTester:
             return self.log_test("Create Outfit", False, f"Error: {str(e)}")
 
     def test_apply_dressing(self):
-        """Test POST /api/dress endpoint"""
+        """Test POST /api/dress endpoint with extended timeout for Gemini Nano Banana"""
         if not self.created_character_id or not self.created_outfit_id:
             return self.log_test("Apply Dressing", False, "No character or outfit created")
         
@@ -144,17 +149,21 @@ class AIDressingRoomTester:
             "lighting_lock": True
         }
         try:
+            print("⏳ Testing AI image generation (may take up to 60 seconds)...")
+            # Extended timeout for Gemini Nano Banana processing
             response = requests.post(
                 f"{self.api_url}/dress", 
                 json=dressing_request,
-                timeout=20
+                timeout=75
             )
             if response.status_code == 200:
                 data = response.json()
+                result_image = data.get('result_image', '')
+                has_result = bool(result_image and len(result_image) > 100)
                 return self.log_test(
-                    "Apply Dressing", 
-                    True, 
-                    f"Applied {len(data.get('parts_applied', []))} parts"
+                    "Apply Dressing with Gemini Nano Banana", 
+                    has_result, 
+                    f"Applied {len(data.get('parts_applied', []))} parts, Got image: {has_result}"
                 )
             else:
                 return self.log_test("Apply Dressing", False, f"Status {response.status_code}")
