@@ -7,7 +7,7 @@ Build a production-level AI Virtual Dressing Room / AI Cloth Changer / Outfit Tr
 - **Frontend**: React 19 + Framer Motion + Tailwind CSS + Shadcn/UI
 - **Backend**: FastAPI + MongoDB (Motor async driver)
 - **LLM Controller**: GPT-5.2 via Emergent Integrations
-- **Image Processing**: Fal.ai (MOCKED - requires FAL_KEY)
+- **Image Generation**: Gemini Nano Banana via Emergent Universal Key
 
 ## User Personas
 1. **Fashion Enthusiasts** - Try different outfits virtually
@@ -27,9 +27,10 @@ Build a production-level AI Virtual Dressing Room / AI Cloth Changer / Outfit Tr
 - ✅ FastAPI server with all CRUD endpoints
 - ✅ MongoDB models: Characters, Outfits, DressingResults, Settings
 - ✅ GPT-5.2 LLM workflow controller integration
-- ✅ Mocked Fal.ai image processing functions
+- ✅ Gemini Nano Banana for AI image generation (via Emergent Universal Key)
 - ✅ Sample data seeding endpoint
 - ✅ Health check endpoint
+- ✅ Budget exceeded error handling with user-friendly messages
 
 ### Frontend
 - ✅ Dressing Room - main canvas with character/outfit selection
@@ -39,28 +40,26 @@ Build a production-level AI Virtual Dressing Room / AI Cloth Changer / Outfit Tr
 - ✅ Settings Page - all lock controls
 - ✅ Responsive dark theme with glassmorphism
 - ✅ Part toggle buttons (Upper, Lower, Shoes, Jacket, Dress, Accessories)
+- ✅ Status feedback for AI processing results
 
-### Design
-- Dark luxury theme (#050505 background)
-- Playfair Display + Manrope + JetBrains Mono fonts
-- Electric Violet (#D946EF) primary accent
-- Glassmorphism cards with backdrop blur
-- Framer Motion animations
+### AI Integration
+- GPT-5.2: Workflow controller for task routing
+- Gemini Nano Banana (gemini-3-pro-image-preview): AI image generation
+- All via Emergent Universal Key - no external API keys needed
 
 ## Prioritized Backlog
 ### P0 (Critical)
-- Provide FAL_KEY to enable real AI image processing
+- ✅ Switch from Fal.ai to Emergent-supported Nano Banana
 
 ### P1 (High Priority)
-- Real image segmentation via Fal.ai
-- Real inpainting for outfit transfer
-- Face/body embedding extraction
+- Ensure Universal Key has sufficient balance for image generation
+- Add image download functionality
+- Batch processing multiple characters
 
 ### P2 (Medium Priority)
 - Outfit pack creation and management
-- Batch processing multiple characters
 - History view with comparison
-- Export/download processed images
+- Better outfit analysis with GPT-5.2 vision
 
 ### P3 (Nice to Have)
 - Social sharing
@@ -69,7 +68,6 @@ Build a production-level AI Virtual Dressing Room / AI Cloth Changer / Outfit Tr
 - AR preview mode
 
 ## Next Tasks
-1. Add FAL_KEY to enable real Fal.ai processing
-2. Implement actual segmentation model calls
-3. Add image download functionality
-4. Implement outfit pack system
+1. Add Universal Key balance (Profile → Universal Key → Add Balance) to enable AI image generation
+2. Add image download functionality
+3. Implement outfit pack system

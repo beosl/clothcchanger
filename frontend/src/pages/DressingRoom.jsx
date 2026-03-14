@@ -112,8 +112,22 @@ export default function DressingRoom() {
         selected_parts: selectedParts,
         ...settings,
       });
-      setResultImage(result.data.result_image);
-      toast.success("Outfit applied successfully!");
+      
+      const data = result.data;
+      setResultImage(data.result_image);
+      
+      // Show appropriate message based on status
+      if (data.status === "success") {
+        toast.success("Outfit applied with AI generation!");
+      } else if (data.status === "budget_exceeded") {
+        toast.warning(data.message || "Universal Key budget exceeded. Please add balance.", { duration: 8000 });
+      } else if (data.status === "fallback") {
+        toast.info(data.message || "Showing original image", { duration: 5000 });
+      } else if (data.status === "error") {
+        toast.error(data.message || "Processing error occurred");
+      } else {
+        toast.success("Processing complete!");
+      }
     } catch (error) {
       console.error("Dressing failed:", error);
       toast.error("Failed to apply outfit. Please try again.");
