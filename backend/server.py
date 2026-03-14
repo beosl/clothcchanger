@@ -148,59 +148,41 @@ Always respond with valid JSON containing:
 
 # ===== AI IMAGE PROCESSING WITH GEMINI NANO BANANA =====
 
-async def generate_outfit_image(character_image: str, outfit_image: str, outfit_name: str, parts: List[str], settings: Dict, outfit_details: Dict = None) -> Dict[str, Any]:
-    """Generate new image with outfit using Gemini Nano Banana - uses both character and outfit images"""
+async def generate_outfit_image(character_image: str, outfit_image: str, outfit_name: str, parts: List[str], settings: Dict) -> Dict[str, Any]:
+    """
+    Virtual try-on: Apply outfit from outfit_image to person in character_image
+    - character_image: The person (face, body, pose preserved)
+    - outfit_image: The clothing to apply
+    """
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
         import httpx
         
-        # Get outfit part descriptions if available
-        outfit_desc = ""
-        if outfit_details:
-            upper = outfit_details.get('upper_wear', {})
-            lower = outfit_details.get('lower_wear', {})
-            footwear = outfit_details.get('footwear', {})
-            
-            if upper:
-                outfit_desc += f"\nUPPER CLOTHING: {upper.get('type', '')} - Color: {upper.get('color', '')} - Pattern: {upper.get('pattern', '')} - Material: {upper.get('material', '')} - Style: {upper.get('style', '')} - Details: {upper.get('details', '')}"
-            if lower:
-                outfit_desc += f"\nLOWER CLOTHING: {lower.get('type', '')} - Color: {lower.get('color', '')} - Pattern: {lower.get('pattern', '')} - Material: {lower.get('material', '')} - Style: {lower.get('style', '')} - Details: {lower.get('details', '')}"
-            if footwear:
-                outfit_desc += f"\nFOOTWEAR: {footwear.get('type', '')} - Color: {footwear.get('color', '')} - Style: {footwear.get('style', '')}"
-        
         parts_str = ", ".join(parts)
         
-        prompt = f"""VIRTUAL OUTFIT TRANSFER TASK:
+        prompt = f"""VIRTUAL TRY-ON TASK:
 
-I'm showing you TWO images:
-1. FIRST IMAGE: The PERSON - Keep this person's face, body, pose, and identity EXACTLY the same
-2. SECOND IMAGE: The OUTFIT - Apply these clothes to the person
+IMAGE 1 (First): THE PERSON - Preserve this person exactly
+IMAGE 2 (Second): THE OUTFIT - Apply these clothes
 
-OUTFIT NAME: {outfit_name}
-PARTS TO APPLY: {parts_str}
-{outfit_desc}
+Task: Put the clothes from Image 2 onto the person in Image 1.
 
-STRICT REQUIREMENTS:
-1. The person in the result must be IDENTICAL to the first image - same face, same pose, same body shape
-2. The clothing in the result must match the SECOND image EXACTLY - same colors, same style, same design
-3. Only change the clothing parts specified: {parts_str}
-4. Keep original background and lighting from the first image
-5. Result must look like a real professional photograph
-6. NO changes to face, hair, skin tone, or body proportions
+RULES:
+1. PERSON: Keep exact same face, body shape, pose, hair, skin tone from Image 1
+2. CLOTHES: Use exact same clothes (color, style, design) from Image 2
+3. Apply these parts: {parts_str}
+4. Keep background from Image 1
+5. Output: Photorealistic image
 
-OUTPUT: A photorealistic image of the SAME PERSON wearing the EXACT OUTFIT from the second image."""
+The person must look IDENTICAL, only their clothes change to match Image 2."""
 
         if settings.get('precision_mode', True):
-            prompt += "\n\nPRECISION MODE: Maximum accuracy required for identity preservation."
-        if settings.get('face_lock', True):
-            prompt += "\nFACE LOCK: Face must be pixel-perfect identical to original."
-        if settings.get('pose_lock', True):
-            prompt += "\nPOSE LOCK: Body pose must remain exactly the same."
+            prompt += "\n\nHIGH PRECISION: Face and body must be pixel-perfect preserved."
         
-        # Download and prepare both images
+        # Prepare images
         images_to_send = []
         
-        # Character image
+        # Character image (person)
         char_base64 = character_image
         if character_image.startswith('http'):
             async with httpx.AsyncClient() as client:
@@ -208,70 +190,79 @@ OUTPUT: A photorealistic image of the SAME PERSON wearing the EXACT OUTFIT from 
                 if response.status_code == 200:
                     char_base64 = base64.b64encode(response.content).decode('utf-8')
                 else:
-                    logger.error(f"Failed to download character image: {response.status_code}")
-                    return {"image": character_image, "status": "error", "message": "Failed to download character image"}
+                    return {"image": character_image, "status": "error", "message": "Could not download character image"}
         elif character_image.startswith('data:'):
             char_base64 = character_image.split(',')[1] if ',' in character_image else character_image
         
         images_to_send.append(ImageContent(char_base64))
         
-        # Outfit image
+        # Outfit image (clothes)
         outfit_base64 = outfit_image
         if outfit_image.startswith('http'):
             async with httpx.AsyncClient() as client:
                 response = await client.get(outfit_image, timeout=30)
                 if response.status_code == 200:
                     outfit_base64 = base64.b64encode(response.content).decode('utf-8')
-                else:
-                    logger.warning(f"Failed to download outfit image: {response.status_code}")
         elif outfit_image.startswith('data:'):
             outfit_base64 = outfit_image.split(',')[1] if ',' in outfit_image else outfit_image
         
-        if outfit_base64 != outfit_image:  # Successfully converted
+        # Add outfit image if converted successfully
+        if not outfit_base64.startswith('http'):
             images_to_send.append(ImageContent(outfit_base64))
         
         # Initialize Nano Banana
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
-            session_id=f"dressing-{uuid.uuid4()}",
-            system_message="You are an expert virtual stylist AI. You transfer outfits between images while perfectly preserving the person's identity. You always maintain the exact face, body shape, and pose of the original person while applying the new clothing."
+            session_id=f"tryon-{uuid.uuid4()}",
+            system_message="You are a virtual try-on AI. You put clothes from one image onto a person from another image, preserving the person's identity perfectly."
         )
         chat.with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
         
-        # Create message with both images
         msg = UserMessage(
             text=prompt,
             file_contents=images_to_send
         )
         
-        # Generate image
         text_response, images = await chat.send_message_multimodal_response(msg)
         
-        logger.info(f"Nano Banana response: {text_response[:100] if text_response else 'No text'}...")
+        logger.info(f"Nano Banana text: {text_response[:100] if text_response else 'No text'}")
+        logger.info(f"Nano Banana images count: {len(images) if images else 0}")
         
         if images and len(images) > 0:
-            img_data = images[0]
-            mime_type = img_data.get('mime_type', 'image/png')
-            img_base64 = img_data.get('data', '')
-            return {"image": f"data:{mime_type};base64,{img_base64}", "status": "success", "message": "AI generated"}
-        else:
-            logger.warning("No image generated by Nano Banana")
-            return {"image": character_image, "status": "fallback", "message": "No image generated, showing original"}
+            img = images[0]
+            logger.info(f"Image type: {type(img)}, keys: {img.keys() if isinstance(img, dict) else 'N/A'}")
+            
+            if isinstance(img, dict):
+                mime = img.get('mime_type', 'image/png')
+                data = img.get('data', '')
+                if data:
+                    logger.info(f"Image data length: {len(data)}")
+                    return {"image": f"data:{mime};base64,{data}", "status": "success", "message": "AI generated"}
+                else:
+                    logger.warning("Image dict has no data")
+            elif isinstance(img, str):
+                logger.info(f"Image is string, length: {len(img)}")
+                return {"image": f"data:image/png;base64,{img}", "status": "success", "message": "AI generated"}
+            elif isinstance(img, bytes):
+                logger.info(f"Image is bytes, length: {len(img)}")
+                encoded = base64.b64encode(img).decode('utf-8')
+                return {"image": f"data:image/png;base64,{encoded}", "status": "success", "message": "AI generated"}
+        
+        logger.warning("No usable image in response")
+        return {"image": character_image, "status": "fallback", "message": "No image generated"}
             
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Nano Banana error: {error_msg}")
         
-        # Check for budget exceeded error
         if "budget" in error_msg.lower() or "exceeded" in error_msg.lower() or "limit" in error_msg.lower():
             return {
                 "image": character_image, 
                 "status": "budget_exceeded", 
-                "message": "Universal Key budget exceeded. Please add balance at Profile → Universal Key → Add Balance"
+                "message": "Universal Key budget exceeded. Add balance at Profile → Universal Key"
             }
         
-        # Fallback to original image if generation fails
-        return {"image": character_image, "status": "error", "message": f"AI processing failed: {error_msg[:100]}"}
+        return {"image": character_image, "status": "error", "message": f"Error: {error_msg[:80]}"}
 
 async def analyze_outfit_with_llm(image_url: str) -> Dict[str, Any]:
     """Use GPT-5.2 to analyze and describe outfit in image with detailed part breakdown"""
@@ -547,29 +538,12 @@ async def update_character(character_id: str, name: str = None):
 
 @api_router.post("/outfits", response_model=Outfit)
 async def create_outfit(outfit: OutfitCreate):
-    """Create/extract outfit from image with AI analysis"""
+    """Create outfit - just save name and image"""
     outfit_obj = Outfit(
         name=outfit.name,
         source_image=outfit.source_image,
-        analysis_status="analyzing"
+        analysis_status="saved"
     )
-    
-    # Analyze outfit with GPT-5.2 vision
-    logger.info(f"Analyzing outfit: {outfit.name}")
-    analysis = await analyze_outfit_with_llm(outfit.source_image)
-    
-    outfit_obj.parts = analysis.get("parts", {})
-    outfit_obj.parts_description = analysis.get("description", "")
-    outfit_obj.analysis_status = analysis.get("status", "completed")
-    
-    # Create Pinterest-style pack image
-    logger.info(f"Creating outfit pack image for: {outfit.name}")
-    try:
-        pack_image = await create_outfit_pack_image(outfit.source_image, analysis)
-        outfit_obj.pack_image = pack_image
-    except Exception as e:
-        logger.error(f"Pack image creation failed: {e}")
-        outfit_obj.pack_image = outfit.source_image
     
     doc = outfit_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -577,33 +551,25 @@ async def create_outfit(outfit: OutfitCreate):
     
     return outfit_obj
 
-@api_router.post("/outfits/{outfit_id}/reanalyze")
-async def reanalyze_outfit(outfit_id: str):
-    """Re-analyze an existing outfit"""
+@api_router.post("/outfits/{outfit_id}/analyze")
+async def analyze_outfit(outfit_id: str):
+    """Analyze outfit with AI (optional - costs credits)"""
     outfit = await db.outfits.find_one({"id": outfit_id}, {"_id": 0})
     if not outfit:
         raise HTTPException(status_code=404, detail="Outfit not found")
     
-    # Re-analyze
+    # Analyze with GPT-5.2
     analysis = await analyze_outfit_with_llm(outfit.get("source_image"))
     
-    # Update outfit
     update_data = {
         "parts": analysis.get("parts", {}),
         "parts_description": analysis.get("description", ""),
-        "analysis_status": analysis.get("status", "reanalyzed")
+        "analysis_status": analysis.get("status", "analyzed")
     }
-    
-    # Create new pack image
-    try:
-        pack_image = await create_outfit_pack_image(outfit.get("source_image"), analysis)
-        update_data["pack_image"] = pack_image
-    except Exception as e:
-        logger.error(f"Pack image creation failed: {e}")
     
     await db.outfits.update_one({"id": outfit_id}, {"$set": update_data})
     
-    return {"message": "Outfit reanalyzed", "id": outfit_id, "analysis": analysis}
+    return {"message": "Outfit analyzed", "id": outfit_id, "analysis": analysis}
 
 @api_router.get("/outfits", response_model=List[Outfit])
 async def get_outfits():
@@ -680,16 +646,12 @@ async def apply_dressing(request: DressingRequest):
         "lighting_lock": request.lighting_lock
     }
     
-    # Get outfit details for better prompt
-    outfit_details = outfit.get('parts', {})
-    
     gen_result = await generate_outfit_image(
         character_image=character.get('base_image'),
         outfit_image=outfit.get('source_image'),
         outfit_name=outfit.get('name'),
         parts=request.selected_parts,
-        settings=settings,
-        outfit_details=outfit_details
+        settings=settings
     )
     
     result = DressingResult(
