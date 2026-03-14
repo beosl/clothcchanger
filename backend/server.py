@@ -57,8 +57,10 @@ class Outfit(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     source_image: str
-    parts: Dict[str, str] = {}  # part_type: image_data
-    masks: Dict[str, str] = {}
+    pack_image: Optional[str] = None  # Pinterest-style layout image
+    parts: Dict[str, Any] = {}  # Detailed part descriptions
+    parts_description: Optional[str] = None
+    analysis_status: str = "pending"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class OutfitCreate(BaseModel):
@@ -146,40 +148,61 @@ Always respond with valid JSON containing:
 
 # ===== AI IMAGE PROCESSING WITH GEMINI NANO BANANA =====
 
-async def generate_outfit_image(character_image: str, outfit_image: str, outfit_name: str, parts: List[str], settings: Dict) -> Dict[str, Any]:
-    """Generate new image with outfit using Gemini Nano Banana"""
+async def generate_outfit_image(character_image: str, outfit_image: str, outfit_name: str, parts: List[str], settings: Dict, outfit_details: Dict = None) -> Dict[str, Any]:
+    """Generate new image with outfit using Gemini Nano Banana - uses both character and outfit images"""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
         import httpx
         
-        # Build detailed prompt for outfit transfer
+        # Get outfit part descriptions if available
+        outfit_desc = ""
+        if outfit_details:
+            upper = outfit_details.get('upper_wear', {})
+            lower = outfit_details.get('lower_wear', {})
+            footwear = outfit_details.get('footwear', {})
+            
+            if upper:
+                outfit_desc += f"\nUPPER CLOTHING: {upper.get('type', '')} - Color: {upper.get('color', '')} - Pattern: {upper.get('pattern', '')} - Material: {upper.get('material', '')} - Style: {upper.get('style', '')} - Details: {upper.get('details', '')}"
+            if lower:
+                outfit_desc += f"\nLOWER CLOTHING: {lower.get('type', '')} - Color: {lower.get('color', '')} - Pattern: {lower.get('pattern', '')} - Material: {lower.get('material', '')} - Style: {lower.get('style', '')} - Details: {lower.get('details', '')}"
+            if footwear:
+                outfit_desc += f"\nFOOTWEAR: {footwear.get('type', '')} - Color: {footwear.get('color', '')} - Style: {footwear.get('style', '')}"
+        
         parts_str = ", ".join(parts)
         
-        prompt = f"""Transform this person's clothing to match the outfit shown.
+        prompt = f"""VIRTUAL OUTFIT TRANSFER TASK:
 
-OUTFIT TO APPLY: {outfit_name}
-CLOTHING PARTS TO CHANGE: {parts_str}
+I'm showing you TWO images:
+1. FIRST IMAGE: The PERSON - Keep this person's face, body, pose, and identity EXACTLY the same
+2. SECOND IMAGE: The OUTFIT - Apply these clothes to the person
 
-CRITICAL REQUIREMENTS:
-- Keep the EXACT same person - same face, same body, same pose
-- Only change the specified clothing parts ({parts_str})
-- Match the style, color, and design of the outfit image
-- Maintain original lighting and background
-- Result must look like a real professional photograph
-- Face and body proportions must remain IDENTICAL
-- High quality fashion photography result"""
+OUTFIT NAME: {outfit_name}
+PARTS TO APPLY: {parts_str}
+{outfit_desc}
+
+STRICT REQUIREMENTS:
+1. The person in the result must be IDENTICAL to the first image - same face, same pose, same body shape
+2. The clothing in the result must match the SECOND image EXACTLY - same colors, same style, same design
+3. Only change the clothing parts specified: {parts_str}
+4. Keep original background and lighting from the first image
+5. Result must look like a real professional photograph
+6. NO changes to face, hair, skin tone, or body proportions
+
+OUTPUT: A photorealistic image of the SAME PERSON wearing the EXACT OUTFIT from the second image."""
 
         if settings.get('precision_mode', True):
-            prompt += "\n- MAXIMUM precision for identity preservation"
+            prompt += "\n\nPRECISION MODE: Maximum accuracy required for identity preservation."
         if settings.get('face_lock', True):
-            prompt += "\n- Face must be COMPLETELY unchanged"
+            prompt += "\nFACE LOCK: Face must be pixel-perfect identical to original."
         if settings.get('pose_lock', True):
-            prompt += "\n- Body pose must stay exactly the same"
+            prompt += "\nPOSE LOCK: Body pose must remain exactly the same."
         
-        # Prepare character image as base64
+        # Download and prepare both images
+        images_to_send = []
+        
+        # Character image
         char_base64 = character_image
         if character_image.startswith('http'):
-            # Download and convert to base64
             async with httpx.AsyncClient() as client:
                 response = await client.get(character_image, timeout=30)
                 if response.status_code == 200:
@@ -188,21 +211,37 @@ CRITICAL REQUIREMENTS:
                     logger.error(f"Failed to download character image: {response.status_code}")
                     return {"image": character_image, "status": "error", "message": "Failed to download character image"}
         elif character_image.startswith('data:'):
-            # Extract base64 from data URL
             char_base64 = character_image.split(',')[1] if ',' in character_image else character_image
+        
+        images_to_send.append(ImageContent(char_base64))
+        
+        # Outfit image
+        outfit_base64 = outfit_image
+        if outfit_image.startswith('http'):
+            async with httpx.AsyncClient() as client:
+                response = await client.get(outfit_image, timeout=30)
+                if response.status_code == 200:
+                    outfit_base64 = base64.b64encode(response.content).decode('utf-8')
+                else:
+                    logger.warning(f"Failed to download outfit image: {response.status_code}")
+        elif outfit_image.startswith('data:'):
+            outfit_base64 = outfit_image.split(',')[1] if ',' in outfit_image else outfit_image
+        
+        if outfit_base64 != outfit_image:  # Successfully converted
+            images_to_send.append(ImageContent(outfit_base64))
         
         # Initialize Nano Banana
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"dressing-{uuid.uuid4()}",
-            system_message="You are an expert fashion AI that transforms clothing on people in images while preserving their identity perfectly."
+            system_message="You are an expert virtual stylist AI. You transfer outfits between images while perfectly preserving the person's identity. You always maintain the exact face, body shape, and pose of the original person while applying the new clothing."
         )
         chat.with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
         
-        # Create message with character image
+        # Create message with both images
         msg = UserMessage(
             text=prompt,
-            file_contents=[ImageContent(char_base64)]
+            file_contents=images_to_send
         )
         
         # Generate image
@@ -211,7 +250,6 @@ CRITICAL REQUIREMENTS:
         logger.info(f"Nano Banana response: {text_response[:100] if text_response else 'No text'}...")
         
         if images and len(images) > 0:
-            # Return as data URL
             img_data = images[0]
             mime_type = img_data.get('mime_type', 'image/png')
             img_base64 = img_data.get('data', '')
@@ -236,38 +274,168 @@ CRITICAL REQUIREMENTS:
         return {"image": character_image, "status": "error", "message": f"AI processing failed: {error_msg[:100]}"}
 
 async def analyze_outfit_with_llm(image_url: str) -> Dict[str, Any]:
-    """Use GPT-5.2 to analyze and describe outfit in image"""
+    """Use GPT-5.2 to analyze and describe outfit in image with detailed part breakdown"""
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        import httpx
+        
+        # Download image and convert to base64 for vision analysis
+        image_base64 = None
+        if image_url.startswith('http'):
+            async with httpx.AsyncClient() as client:
+                response = await client.get(image_url, timeout=30)
+                if response.status_code == 200:
+                    image_base64 = base64.b64encode(response.content).decode('utf-8')
+        elif image_url.startswith('data:'):
+            image_base64 = image_url.split(',')[1] if ',' in image_url else image_url
+        else:
+            image_base64 = image_url
         
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"outfit-analysis-{uuid.uuid4()}",
-            system_message="""You are a fashion AI that analyzes clothing in images.
-Describe the outfit in detail including:
-- Upper wear (shirt, blouse, jacket, etc.)
-- Lower wear (pants, skirt, shorts, etc.)
-- Footwear
-- Accessories
-- Colors, patterns, and style
+            system_message="""You are a professional fashion analyst. Analyze clothing images and provide EXTREMELY detailed descriptions.
 
-Respond with a detailed description that could be used to recreate the outfit."""
+You MUST respond in this EXACT JSON format:
+{
+  "upper_wear": {
+    "type": "shirt/blouse/t-shirt/sweater/hoodie/jacket/coat/tank top/etc",
+    "color": "exact color description",
+    "pattern": "solid/striped/plaid/floral/graphic/etc",
+    "material": "cotton/silk/denim/leather/wool/etc",
+    "style": "casual/formal/sporty/elegant/etc",
+    "details": "buttons, collar type, sleeve length, any logos or prints"
+  },
+  "lower_wear": {
+    "type": "pants/jeans/shorts/skirt/trousers/leggings/etc",
+    "color": "exact color description",
+    "pattern": "solid/striped/etc",
+    "material": "denim/cotton/leather/etc",
+    "style": "slim fit/wide leg/high waisted/etc",
+    "details": "pockets, rips, belt loops, length"
+  },
+  "footwear": {
+    "type": "sneakers/boots/heels/sandals/loafers/etc",
+    "color": "exact color",
+    "style": "description"
+  },
+  "accessories": ["list of visible accessories like bags, hats, jewelry, belts"],
+  "overall_style": "one sentence describing the complete outfit vibe",
+  "color_palette": ["list of main colors in the outfit"]
+}
+
+Be extremely specific about colors, patterns, and styles. This will be used to recreate the exact outfit."""
         ).with_model("openai", "gpt-5.2")
         
-        user_message = UserMessage(text=f"Analyze the outfit in this image and provide a detailed description: {image_url}")
-        response = await chat.send_message(user_message)
+        if image_base64:
+            msg = UserMessage(
+                text="Analyze this outfit image in extreme detail. Respond ONLY with valid JSON.",
+                file_contents=[ImageContent(image_base64)]
+            )
+        else:
+            msg = UserMessage(text=f"Analyze this outfit: {image_url}. Respond ONLY with valid JSON.")
         
-        return {
-            "description": response,
-            "status": "analyzed"
-        }
+        response = await chat.send_message(msg)
+        
+        # Try to parse JSON response
+        try:
+            # Clean response - remove markdown code blocks if present
+            clean_response = response.strip()
+            if clean_response.startswith('```'):
+                clean_response = clean_response.split('```')[1]
+                if clean_response.startswith('json'):
+                    clean_response = clean_response[4:]
+            clean_response = clean_response.strip()
+            
+            outfit_data = json.loads(clean_response)
+            return {
+                "parts": outfit_data,
+                "description": response,
+                "status": "analyzed"
+            }
+        except json.JSONDecodeError:
+            return {
+                "parts": {},
+                "description": response,
+                "status": "analyzed_text_only"
+            }
             
     except Exception as e:
         logger.error(f"Outfit analysis error: {e}")
         return {
-            "description": "Casual outfit with modern styling",
-            "status": "fallback"
+            "parts": {},
+            "description": "Modern casual outfit",
+            "status": "fallback",
+            "error": str(e)
         }
+
+async def create_outfit_pack_image(outfit_image: str, outfit_analysis: Dict) -> str:
+    """Create a Pinterest-style outfit pack showing parts separately"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        import httpx
+        
+        # Download image
+        image_base64 = None
+        if outfit_image.startswith('http'):
+            async with httpx.AsyncClient() as client:
+                response = await client.get(outfit_image, timeout=30)
+                if response.status_code == 200:
+                    image_base64 = base64.b64encode(response.content).decode('utf-8')
+        elif outfit_image.startswith('data:'):
+            image_base64 = outfit_image.split(',')[1] if ',' in outfit_image else outfit_image
+        else:
+            image_base64 = outfit_image
+        
+        parts = outfit_analysis.get('parts', {})
+        upper = parts.get('upper_wear', {})
+        lower = parts.get('lower_wear', {})
+        
+        prompt = f"""Create a Pinterest-style outfit layout image showing these clothing items SEPARATELY on a clean white/light background:
+
+UPPER WEAR: {upper.get('type', 'top')} - {upper.get('color', '')} {upper.get('pattern', '')} {upper.get('material', '')}
+Details: {upper.get('details', '')}
+
+LOWER WEAR: {lower.get('type', 'bottom')} - {lower.get('color', '')} {lower.get('pattern', '')} {lower.get('material', '')}
+Details: {lower.get('details', '')}
+
+Layout requirements:
+- Clean, minimal white or light gray background
+- Upper garment displayed at top, neatly laid flat
+- Lower garment displayed below, neatly laid flat
+- Professional product photography style
+- Items should look like they're laid on a flat surface
+- No mannequin or person, just the clothes
+- High quality, Instagram/Pinterest worthy aesthetic"""
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"outfit-pack-{uuid.uuid4()}",
+            system_message="You create beautiful Pinterest-style outfit layout images showing clothing items separately on clean backgrounds."
+        )
+        chat.with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
+        
+        if image_base64:
+            msg = UserMessage(
+                text=prompt + "\n\nUse the exact clothing items from this reference image:",
+                file_contents=[ImageContent(image_base64)]
+            )
+        else:
+            msg = UserMessage(text=prompt)
+        
+        text_response, images = await chat.send_message_multimodal_response(msg)
+        
+        if images and len(images) > 0:
+            img_data = images[0]
+            mime_type = img_data.get('mime_type', 'image/png')
+            img_base64 = img_data.get('data', '')
+            return f"data:{mime_type};base64,{img_base64}"
+        
+        return outfit_image
+        
+    except Exception as e:
+        logger.error(f"Outfit pack creation error: {e}")
+        return outfit_image
 
 # Legacy functions for compatibility
 async def mock_segmentation(image_data: str) -> Dict[str, Any]:
@@ -379,32 +547,63 @@ async def update_character(character_id: str, name: str = None):
 
 @api_router.post("/outfits", response_model=Outfit)
 async def create_outfit(outfit: OutfitCreate):
-    """Create/extract outfit from image"""
+    """Create/extract outfit from image with AI analysis"""
     outfit_obj = Outfit(
         name=outfit.name,
-        source_image=outfit.source_image
+        source_image=outfit.source_image,
+        analysis_status="analyzing"
     )
     
-    # Extract parts using LLM workflow
-    workflow_result = await llm_workflow_controller(
-        "extract_outfit",
-        {"name": outfit.name, "has_image": bool(outfit.source_image)}
-    )
+    # Analyze outfit with GPT-5.2 vision
+    logger.info(f"Analyzing outfit: {outfit.name}")
+    analysis = await analyze_outfit_with_llm(outfit.source_image)
     
-    # Mock extraction
-    extracted = await mock_outfit_extraction(outfit.source_image)
-    outfit_obj.parts = {
-        "upper_wear": outfit.source_image,
-        "lower_wear": outfit.source_image,
-        "shoes": outfit.source_image
-    }
-    outfit_obj.masks = {"full": "placeholder_mask"}
+    outfit_obj.parts = analysis.get("parts", {})
+    outfit_obj.parts_description = analysis.get("description", "")
+    outfit_obj.analysis_status = analysis.get("status", "completed")
+    
+    # Create Pinterest-style pack image
+    logger.info(f"Creating outfit pack image for: {outfit.name}")
+    try:
+        pack_image = await create_outfit_pack_image(outfit.source_image, analysis)
+        outfit_obj.pack_image = pack_image
+    except Exception as e:
+        logger.error(f"Pack image creation failed: {e}")
+        outfit_obj.pack_image = outfit.source_image
     
     doc = outfit_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.outfits.insert_one(doc)
     
     return outfit_obj
+
+@api_router.post("/outfits/{outfit_id}/reanalyze")
+async def reanalyze_outfit(outfit_id: str):
+    """Re-analyze an existing outfit"""
+    outfit = await db.outfits.find_one({"id": outfit_id}, {"_id": 0})
+    if not outfit:
+        raise HTTPException(status_code=404, detail="Outfit not found")
+    
+    # Re-analyze
+    analysis = await analyze_outfit_with_llm(outfit.get("source_image"))
+    
+    # Update outfit
+    update_data = {
+        "parts": analysis.get("parts", {}),
+        "parts_description": analysis.get("description", ""),
+        "analysis_status": analysis.get("status", "reanalyzed")
+    }
+    
+    # Create new pack image
+    try:
+        pack_image = await create_outfit_pack_image(outfit.get("source_image"), analysis)
+        update_data["pack_image"] = pack_image
+    except Exception as e:
+        logger.error(f"Pack image creation failed: {e}")
+    
+    await db.outfits.update_one({"id": outfit_id}, {"$set": update_data})
+    
+    return {"message": "Outfit reanalyzed", "id": outfit_id, "analysis": analysis}
 
 @api_router.get("/outfits", response_model=List[Outfit])
 async def get_outfits():
@@ -451,7 +650,7 @@ async def update_outfit(outfit_id: str, name: str = None):
 
 @api_router.post("/dress", response_model=DressingResult)
 async def apply_dressing(request: DressingRequest):
-    """Apply outfit to character using Gemini Nano Banana"""
+    """Apply outfit to character using Gemini Nano Banana with detailed outfit analysis"""
     # Get character and outfit
     character = await db.characters.find_one({"id": request.character_id}, {"_id": 0})
     if not character:
@@ -481,12 +680,16 @@ async def apply_dressing(request: DressingRequest):
         "lighting_lock": request.lighting_lock
     }
     
+    # Get outfit details for better prompt
+    outfit_details = outfit.get('parts', {})
+    
     gen_result = await generate_outfit_image(
         character_image=character.get('base_image'),
         outfit_image=outfit.get('source_image'),
         outfit_name=outfit.get('name'),
         parts=request.selected_parts,
-        settings=settings
+        settings=settings,
+        outfit_details=outfit_details
     )
     
     result = DressingResult(

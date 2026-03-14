@@ -96,7 +96,16 @@ export default function OutfitLibrary() {
 
   const getPartsList = (parts) => {
     if (!parts) return [];
-    return Object.keys(parts).filter(key => parts[key]);
+    // Handle new format with detailed part objects
+    const partKeys = ['upper_wear', 'lower_wear', 'footwear', 'accessories'];
+    return partKeys.filter(key => parts[key] && Object.keys(parts[key]).length > 0);
+  };
+
+  const getPartDescription = (parts, partKey) => {
+    if (!parts || !parts[partKey]) return null;
+    const part = parts[partKey];
+    if (typeof part === 'string') return part;
+    return `${part.type || ''} - ${part.color || ''} ${part.pattern || ''}`.trim();
   };
 
   return (
@@ -260,51 +269,103 @@ export default function OutfitLibrary() {
 
       {/* Preview Dialog */}
       <Dialog open={!!selectedPreview} onOpenChange={() => setSelectedPreview(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-3xl p-0 overflow-hidden" data-testid="outfit-preview-dialog">
+        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-4xl p-0 overflow-hidden" data-testid="outfit-preview-dialog">
           {selectedPreview && (
             <div className="flex">
-              <div className="w-1/2">
-                <img 
-                  src={selectedPreview.source_image} 
-                  alt={selectedPreview.name}
-                  className="w-full aspect-[3/4] object-cover"
-                />
+              <div className="w-1/2 flex flex-col">
+                <div className="flex-1">
+                  <img 
+                    src={selectedPreview.source_image} 
+                    alt={selectedPreview.name}
+                    className="w-full aspect-[3/4] object-cover"
+                  />
+                </div>
+                {selectedPreview.pack_image && selectedPreview.pack_image !== selectedPreview.source_image && (
+                  <div className="p-2 bg-zinc-800/50">
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2 text-center">Pinterest Style Pack</p>
+                    <img 
+                      src={selectedPreview.pack_image} 
+                      alt="Outfit Pack"
+                      className="w-full aspect-square object-cover"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="w-1/2 p-8 flex flex-col">
+              <div className="w-1/2 p-8 flex flex-col overflow-auto max-h-[80vh]">
                 <DialogHeader>
                   <DialogTitle className="font-secondary text-3xl">{selectedPreview.name}</DialogTitle>
+                  {selectedPreview.analysis_status && (
+                    <Badge className={`w-fit mt-2 ${selectedPreview.analysis_status === 'analyzed' ? 'bg-success' : 'bg-zinc-700'}`}>
+                      {selectedPreview.analysis_status}
+                    </Badge>
+                  )}
                 </DialogHeader>
                 
                 <div className="mt-6 flex-1">
                   <h4 className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">
-                    Extracted Parts
+                    Detected Clothing Parts
                   </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {getPartsList(selectedPreview.parts).map((part) => (
-                      <Badge 
-                        key={part}
-                        className="bg-zinc-800 text-white font-mono uppercase tracking-wider"
-                      >
-                        {part.replace("_", " ")}
-                      </Badge>
-                    ))}
-                  </div>
                   
-                  <div className="mt-8">
-                    <h4 className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">
-                      Outfit Details
-                    </h4>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between py-2 border-b border-zinc-800">
-                        <span className="text-zinc-500">Parts Count</span>
-                        <span>{getPartsList(selectedPreview.parts).length}</span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-zinc-800">
-                        <span className="text-zinc-500">Has Masks</span>
-                        <span>{Object.keys(selectedPreview.masks || {}).length > 0 ? "Yes" : "No"}</span>
+                  {/* Upper Wear */}
+                  {selectedPreview.parts?.upper_wear && (
+                    <div className="mb-4 p-3 bg-zinc-800/30 rounded">
+                      <h5 className="text-xs font-mono text-primary mb-2">UPPER WEAR</h5>
+                      <p className="text-sm text-zinc-300">
+                        {selectedPreview.parts.upper_wear.type && <span className="font-medium">{selectedPreview.parts.upper_wear.type}</span>}
+                        {selectedPreview.parts.upper_wear.color && <span> • {selectedPreview.parts.upper_wear.color}</span>}
+                        {selectedPreview.parts.upper_wear.pattern && <span> • {selectedPreview.parts.upper_wear.pattern}</span>}
+                      </p>
+                      {selectedPreview.parts.upper_wear.details && (
+                        <p className="text-xs text-zinc-500 mt-1">{selectedPreview.parts.upper_wear.details}</p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Lower Wear */}
+                  {selectedPreview.parts?.lower_wear && (
+                    <div className="mb-4 p-3 bg-zinc-800/30 rounded">
+                      <h5 className="text-xs font-mono text-secondary mb-2">LOWER WEAR</h5>
+                      <p className="text-sm text-zinc-300">
+                        {selectedPreview.parts.lower_wear.type && <span className="font-medium">{selectedPreview.parts.lower_wear.type}</span>}
+                        {selectedPreview.parts.lower_wear.color && <span> • {selectedPreview.parts.lower_wear.color}</span>}
+                        {selectedPreview.parts.lower_wear.pattern && <span> • {selectedPreview.parts.lower_wear.pattern}</span>}
+                      </p>
+                      {selectedPreview.parts.lower_wear.details && (
+                        <p className="text-xs text-zinc-500 mt-1">{selectedPreview.parts.lower_wear.details}</p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Footwear */}
+                  {selectedPreview.parts?.footwear && (
+                    <div className="mb-4 p-3 bg-zinc-800/30 rounded">
+                      <h5 className="text-xs font-mono text-accent mb-2">FOOTWEAR</h5>
+                      <p className="text-sm text-zinc-300">
+                        {selectedPreview.parts.footwear.type && <span className="font-medium">{selectedPreview.parts.footwear.type}</span>}
+                        {selectedPreview.parts.footwear.color && <span> • {selectedPreview.parts.footwear.color}</span>}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Overall Style */}
+                  {selectedPreview.parts?.overall_style && (
+                    <div className="mt-4 p-3 border border-zinc-700 rounded">
+                      <h5 className="text-xs font-mono text-zinc-500 mb-2">OVERALL STYLE</h5>
+                      <p className="text-sm text-zinc-300">{selectedPreview.parts.overall_style}</p>
+                    </div>
+                  )}
+                  
+                  {/* Color Palette */}
+                  {selectedPreview.parts?.color_palette && selectedPreview.parts.color_palette.length > 0 && (
+                    <div className="mt-4">
+                      <h5 className="text-xs font-mono text-zinc-500 mb-2">COLOR PALETTE</h5>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPreview.parts.color_palette.map((color, i) => (
+                          <Badge key={i} variant="outline" className="border-zinc-600">{color}</Badge>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
                 
                 <div className="mt-6 flex gap-3">
