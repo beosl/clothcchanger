@@ -1,0 +1,147 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "tone": "Luxury, Precision, Editorial, Cybernetic",
+    "description": "A high-end virtual dressing room that feels like a futuristic fashion studio, not a generic SaaS dashboard. Dark, mysterious, but hyper-functional."
+  },
+  "typography": {
+    "primary_font": "Manrope",
+    "secondary_font": "Playfair Display",
+    "mono_font": "JetBrains Mono",
+    "scale": {
+      "h1": "text-5xl md:text-7xl font-secondary font-medium tracking-tight leading-none",
+      "h2": "text-3xl md:text-5xl font-secondary font-medium tracking-tight",
+      "h3": "text-2xl md:text-3xl font-secondary font-medium",
+      "body": "text-base md:text-lg font-primary text-zinc-300 leading-relaxed",
+      "caption": "text-xs font-mono uppercase tracking-[0.2em] text-zinc-500",
+      "label": "text-sm font-primary font-semibold tracking-wide"
+    },
+    "installation_command": "npm install @fontsource/playfair-display @fontsource/manrope @fontsource/jetbrains-mono"
+  },
+  "colors": {
+    "palette": {
+      "background": "#050505",
+      "surface": "#121212",
+      "surface_highlight": "#1E1E1E",
+      "text_primary": "#FFFFFF",
+      "text_secondary": "#A1A1AA",
+      "border": "#27272A",
+      "primary": "#D946EF",
+      "primary_hover": "#C026D3",
+      "secondary": "#BEF264",
+      "accent": "#8B5CF6",
+      "error": "#F43F5E",
+      "success": "#10B981"
+    },
+    "gradients": {
+      "hero": "bg-gradient-to-r from-violet-900/50 via-fuchsia-900/50 to-black",
+      "glass": "bg-white/5 backdrop-blur-xl border border-white/10",
+      "glass_hover": "hover:bg-white/10 transition-colors duration-300",
+      "active_item": "bg-zinc-800/50 border-l-2 border-primary"
+    },
+    "theme_strategy": "dark"
+  },
+  "visual_enhancers": {
+    "radius": "rounded-none",
+    "shadows": {
+      "card": "shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_4px_20px_rgba(0,0,0,0.5)]",
+      "glow": "drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]"
+    },
+    "animations": {
+      "hover_lift": "hover:-translate-y-1 transition-transform duration-300 ease-out",
+      "fade_in": "animate-in fade-in duration-500",
+      "slide_up": "animate-in slide-in-from-bottom-4 duration-500"
+    },
+    "textures": {
+      "noise": "bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"
+    }
+  },
+  "layout_strategies": {
+    "dashboard": "grid grid-cols-[80px_1fr] h-screen overflow-hidden",
+    "dressing_room": "grid grid-cols-[300px_1fr_300px] h-full gap-0",
+    "card_grid": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8",
+    "marketing_hero": "flex flex-col items-center justify-center min-h-[80vh] relative overflow-hidden"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-white rounded-none px-8 py-3 font-mono uppercase tracking-widest hover:bg-primary_hover transition-all relative overflow-hidden",
+      "secondary": "bg-transparent border border-zinc-700 text-white rounded-none px-8 py-3 font-mono uppercase tracking-widest hover:border-white transition-all",
+      "ghost": "text-zinc-400 hover:text-white transition-colors font-mono text-sm"
+    },
+    "cards": {
+      "outfit": "group relative aspect-[3/4] bg-zinc-900 overflow-hidden border border-zinc-800 hover:border-zinc-600 transition-colors",
+      "glass": "bg-white/5 backdrop-blur-md border border-white/10 p-6"
+    },
+    "inputs": {
+      "default": "bg-transparent border-b border-zinc-700 focus:border-primary outline-none py-2 text-white placeholder-zinc-600 transition-colors rounded-none"
+    }
+  },
+  "image_urls": {
+    "models": [
+      {
+        "url": "https://images.unsplash.com/photo-1584287981937-67ab60932edf?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Female model in white dress studio",
+        "category": "character"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1759247943108-39e23e97fde4?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Male model with tattoos studio",
+        "category": "character"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1772714601064-056e3ceced8f?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Female model in pink tracksuit",
+        "category": "character"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1771092358890-0db24db44e56?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Male model in black sweater",
+        "category": "character"
+      }
+    ],
+    "textures": [
+      {
+        "url": "https://images.unsplash.com/photo-1761078739411-2ccb6e956c16?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Abstract red swirl",
+        "category": "background"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1676696706907-0e04665b80bd?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Teal fabric texture",
+        "category": "background"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1760224254117-7a40f7f03fe2?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Dark blue fabric texture",
+        "category": "background"
+      }
+    ]
+  },
+  "assets_and_icons": {
+    "icon_library": "lucide-react",
+    "logo_text": "VOGUE_AI",
+    "logo_font": "font-secondary tracking-tighter"
+  },
+  "instructions_to_main_agent": [
+    "INSTALL FONTS FIRST: Run 'npm install @fontsource/playfair-display @fontsource/manrope @fontsource/jetbrains-mono' and import them in index.js/App.js.",
+    "THEME SETUP: Update tailwind.config.js to use the provided color palette. Extend the theme, do not overwrite default Tailwind colors unless necessary. Use CSS variables for flexibility.",
+    "LAYOUT: Implement the 'Dashboard' layout as the shell. The Sidebar should be minimal (icon-only or thin).",
+    "DRESSING ROOM: This is the core. Use the 'dressing_room' grid layout. Left panel = Character Select. Right panel = Outfit Select. Center = Canvas.",
+    "COMPONENTS: Use Shadcn components for logic (Select, Dialog, Tabs) but OVERRIDE their styles to match the 'E1' aesthetic (sharp corners, glass backgrounds, no default white backgrounds).",
+    "IMAGES: Use the provided Unsplash URLs for initial data population. Do not leave empty states.",
+    "ANIMATIONS: Use 'framer-motion' for page transitions and layout changes (e.g., when an outfit is applied).",
+    "TESTING: Add data-testid to all interactive elements."
+  ],
+  "universal_guidelines": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all.",
+    "You MUST NOT center align the app container.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER use AI assistant Emoji characters.",
+    "Every interaction needs micro-animations.",
+    "Use 2-3x more spacing than feels comfortable."
+  ]
+}
