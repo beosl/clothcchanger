@@ -1,138 +1,163 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   User, 
   Shirt, 
   ArrowRight, 
+  ArrowLeft,
   Loader2, 
   Check, 
-  Lock,
-  Unlock,
-  RefreshCw,
-  Download,
-  ChevronDown,
-  Layers
+  Upload,
+  X,
+  Sparkles,
+  PersonStanding,
+  RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
-const PARTS = [
-  { id: "upper_wear", label: "Upper" },
-  { id: "lower_wear", label: "Lower" },
-  { id: "shoes", label: "Shoes" },
-  { id: "jacket", label: "Jacket" },
-  { id: "dress", label: "Dress" },
-  { id: "accessories", label: "Accessories" },
+// Preset poses
+const POSE_PRESETS = [
+  { id: "original", name: "Orijinal Poz", description: "Karakterin kendi pozunu koru", icon: "🎯" },
+  { id: "standing_front", name: "Ayakta Önden", description: "Düz duruş, kameraya bakıyor", icon: "🧍" },
+  { id: "standing_side", name: "Ayakta Yandan", description: "Profil görünüm", icon: "🚶" },
+  { id: "walking", name: "Yürüyüş", description: "Doğal yürüyüş pozu", icon: "🚶‍♀️" },
+  { id: "sitting", name: "Oturma", description: "Sandalyede oturmuş", icon: "🪑" },
+  { id: "leaning", name: "Yaslanmış", description: "Duvara yaslanmış", icon: "🧘" },
+  { id: "arms_crossed", name: "Kollar Kavuşuk", description: "Kollar göğüste kavuşuk", icon: "💪" },
+  { id: "hands_pocket", name: "Eller Cepte", description: "Rahat duruş, eller cepte", icon: "🤙" },
+  { id: "fashion_pose", name: "Moda Pozu", description: "Profesyonel moda çekimi pozu", icon: "✨" },
+  { id: "casual", name: "Rahat Poz", description: "Doğal ve rahat duruş", icon: "😊" },
+  { id: "confident", name: "Özgüvenli", description: "Güçlü ve özgüvenli duruş", icon: "💫" },
 ];
 
 export default function DressingRoom() {
+  const [step, setStep] = useState(1); // 1: Character, 2: Outfit, 3: Pose, 4: Result
   const [characters, setCharacters] = useState([]);
-  const [outfits, setOutfits] = useState([]);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
-  const [selectedOutfit, setSelectedOutfit] = useState(null);
-  const [selectedParts, setSelectedParts] = useState(["upper_wear", "lower_wear"]);
+  const [outfitImage, setOutfitImage] = useState(null);
+  const [selectedPose, setSelectedPose] = useState("original");
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [settings, setSettings] = useState({
-    precision_mode: true,
-    face_lock: true,
-    body_lock: true,
-    pose_lock: true,
-    lighting_lock: true,
-  });
+  const fileInputRef = useRef(null);
 
-  const loadData = useCallback(async () => {
+  const loadCharacters = useCallback(async () => {
     setLoading(true);
     try {
-      const [charRes, outfitRes, settingsRes] = await Promise.all([
-        api.getCharacters(),
-        api.getOutfits(),
-        api.getSettings(),
-      ]);
-      setCharacters(charRes.data);
-      setOutfits(outfitRes.data);
-      setSettings(settingsRes.data);
+      const response = await api.getCharacters();
+      setCharacters(response.data);
       
       // Auto-seed if empty
-      if (charRes.data.length === 0 && outfitRes.data.length === 0) {
+      if (response.data.length === 0) {
         await api.seedData();
-        const [newChars, newOutfits] = await Promise.all([
-          api.getCharacters(),
-          api.getOutfits(),
-        ]);
-        setCharacters(newChars.data);
-        setOutfits(newOutfits.data);
-        toast.success("Sample data loaded");
+        const newResponse = await api.getCharacters();
+        setCharacters(newResponse.data);
       }
     } catch (error) {
-      console.error("Failed to load data:", error);
-      toast.error("Failed to load data");
+      console.error("Failed to load characters:", error);
+      toast.error("Karakterler yüklenemedi");
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadCharacters();
+  }, [loadCharacters]);
 
-  const togglePart = (partId) => {
-    setSelectedParts(prev => 
-      prev.includes(partId) 
-        ? prev.filter(p => p !== partId)
-        : [...prev, partId]
-    );
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setOutfitImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const applyDressing = async () => {
-    if (!selectedCharacter || !selectedOutfit) {
-      toast.error("Select both character and outfit");
+  const handleUrlInput = (url) => {
+    if (url.startsWith("http")) {
+      setOutfitImage(url);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setOutfitImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const selectCharacter = (char) => {
+    setSelectedCharacter(char);
+    setStep(2);
+  };
+
+  const goToStep = (stepNum) => {
+    if (stepNum === 1) {
+      setSelectedCharacter(null);
+      setOutfitImage(null);
+      setSelectedPose("original");
+      setResultImage(null);
+    } else if (stepNum === 2 && !selectedCharacter) {
+      return;
+    } else if (stepNum === 3 && !outfitImage) {
       return;
     }
-    if (selectedParts.length === 0) {
-      toast.error("Select at least one clothing part");
+    setStep(stepNum);
+  };
+
+  const generateResult = async () => {
+    if (!selectedCharacter || !outfitImage) {
+      toast.error("Karakter ve kombin seçilmeli");
       return;
     }
 
     setProcessing(true);
-    toast.info("AI generating new image... This may take up to 60 seconds", { duration: 5000 });
+    setStep(4);
+    toast.info("AI görüntü oluşturuyor... 30-60 saniye sürebilir", { duration: 5000 });
+
     try {
-      const result = await api.applyDressing({
-        character_id: selectedCharacter.id,
-        outfit_id: selectedOutfit.id,
-        selected_parts: selectedParts,
-        ...settings,
+      const response = await api.generateWithPose({
+        character_image: selectedCharacter.base_image,
+        outfit_image: outfitImage,
+        pose: selectedPose,
+        character_name: selectedCharacter.name
       });
-      
-      const data = result.data;
+
+      const data = response.data;
       setResultImage(data.result_image);
-      
-      // Show appropriate message based on status
+
       if (data.status === "success") {
-        toast.success("Outfit applied with AI generation!");
+        toast.success("Görüntü başarıyla oluşturuldu!");
       } else if (data.status === "budget_exceeded") {
-        toast.warning(data.message || "Universal Key budget exceeded. Please add balance.", { duration: 8000 });
-      } else if (data.status === "fallback") {
-        toast.info(data.message || "Showing original image", { duration: 5000 });
-      } else if (data.status === "error") {
-        toast.error(data.message || "Processing error occurred");
+        toast.warning(data.message, { duration: 8000 });
       } else {
-        toast.success("Processing complete!");
+        toast.info(data.message || "İşlem tamamlandı");
       }
     } catch (error) {
-      console.error("Dressing failed:", error);
-      toast.error("Failed to apply outfit. Please try again.");
+      console.error("Generation failed:", error);
+      toast.error("Görüntü oluşturulamadı");
+      setStep(3);
     }
     setProcessing(false);
+  };
+
+  const reset = () => {
+    setStep(1);
+    setSelectedCharacter(null);
+    setOutfitImage(null);
+    setSelectedPose("original");
+    setResultImage(null);
   };
 
   if (loading) {
@@ -144,279 +169,355 @@ export default function DressingRoom() {
   }
 
   return (
-    <div className="h-full grid grid-cols-[300px_1fr_300px]" data-testid="dressing-room">
-      {/* Left Panel - Characters */}
-      <div className="border-r border-zinc-800/50 bg-[#0a0a0a] flex flex-col">
-        <div className="p-6 border-b border-zinc-800/50">
-          <div className="flex items-center gap-3">
-            <User className="w-5 h-5 text-zinc-400" />
-            <h2 className="font-secondary text-xl">Characters</h2>
-          </div>
-          <p className="text-xs text-zinc-500 mt-2 font-mono uppercase tracking-wider">
-            Select a model
-          </p>
-        </div>
-        
-        <ScrollArea className="flex-1">
-          <div className="p-4 grid grid-cols-2 gap-3">
-            {characters.map((char) => (
-              <motion.div
-                key={char.id}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedCharacter(char)}
-                className={`asset-card cursor-pointer ${selectedCharacter?.id === char.id ? "selected" : ""}`}
-                data-testid={`character-card-${char.id}`}
-              >
-                <img src={char.base_image} alt={char.name} loading="lazy" />
-                <div className="overlay flex flex-col justify-end p-3">
-                  <span className="text-xs font-medium truncate">{char.name}</span>
-                  {char.locked && <Lock className="w-3 h-3 text-primary mt-1" />}
+    <div className="h-full flex flex-col bg-[#050505]" data-testid="dressing-room">
+      {/* Header */}
+      <div className="p-6 border-b border-zinc-800/30">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="font-secondary text-3xl">AI Giysi Değiştirici</h1>
+              <p className="text-zinc-500 mt-1 text-sm">Karaktere kombin giydir</p>
+            </div>
+            
+            {/* Step Indicator */}
+            <div className="flex items-center gap-2">
+              {[
+                { num: 1, label: "Karakter" },
+                { num: 2, label: "Kombin" },
+                { num: 3, label: "Poz" },
+                { num: 4, label: "Sonuç" },
+              ].map((s, i) => (
+                <div key={s.num} className="flex items-center">
+                  <button
+                    onClick={() => goToStep(s.num)}
+                    disabled={s.num > step + 1}
+                    className={`w-8 h-8 flex items-center justify-center font-mono text-xs transition-all
+                      ${step >= s.num ? "bg-primary text-white" : "bg-zinc-800 text-zinc-500"}
+                      ${step === s.num ? "ring-2 ring-primary ring-offset-2 ring-offset-[#050505]" : ""}
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {step > s.num ? <Check className="w-4 h-4" /> : s.num}
+                  </button>
+                  {i < 3 && (
+                    <div className={`w-8 h-0.5 ${step > s.num ? "bg-primary" : "bg-zinc-800"}`} />
+                  )}
                 </div>
-                {selectedCharacter?.id === char.id && (
-                  <div className="absolute top-2 right-2 w-6 h-6 bg-primary flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
-                  </div>
-                )}
-              </motion.div>
-            ))}
+              ))}
+            </div>
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
-      {/* Center - Canvas */}
-      <div className="flex flex-col bg-[#050505]">
-        {/* Top Bar */}
-        <div className="p-4 border-b border-zinc-800/30 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="font-secondary text-2xl">Dressing Room</h1>
-            <span className="px-3 py-1 bg-zinc-800/50 font-mono text-[10px] uppercase tracking-widest text-zinc-400">
-              {settings.precision_mode ? "Precision Mode" : "Standard Mode"}
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={loadData}
-              className="text-zinc-400 hover:text-white"
-              data-testid="refresh-btn"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white" data-testid="more-options-btn">
-                  <Layers className="w-4 h-4 mr-2" />
-                  <span className="font-mono text-xs">Parts</span>
-                  <ChevronDown className="w-3 h-3 ml-2" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
-                <DropdownMenuItem onClick={() => setSelectedParts(PARTS.map(p => p.id))}>
-                  Select All Parts
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedParts([])}>
-                  Clear All
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedParts(["upper_wear", "lower_wear"])}>
-                  Top & Bottom Only
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {/* Canvas Area */}
-        <div className="flex-1 p-8 flex flex-col items-center justify-center">
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-5xl mx-auto p-6">
           <AnimatePresence mode="wait">
-            {resultImage ? (
+            {/* Step 1: Select Character */}
+            {step === 1 && (
               <motion.div
-                key="result"
+                key="step1"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-6"
+              >
+                <div className="text-center mb-8">
+                  <User className="w-12 h-12 mx-auto text-primary mb-4" />
+                  <h2 className="font-secondary text-2xl">Karakter Seç</h2>
+                  <p className="text-zinc-500 mt-2">Kıyafet giydirmek istediğiniz kişiyi seçin</p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {characters.map((char) => (
+                    <motion.div
+                      key={char.id}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => selectCharacter(char)}
+                      className="cursor-pointer group"
+                      data-testid={`select-character-${char.id}`}
+                    >
+                      <div className="asset-card">
+                        <img src={char.base_image} alt={char.name} loading="lazy" />
+                        <div className="overlay flex items-end p-3">
+                          <span className="text-sm font-medium">{char.name}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 2: Upload Outfit */}
+            {step === 2 && (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-6"
+              >
+                <div className="text-center mb-8">
+                  <Shirt className="w-12 h-12 mx-auto text-secondary mb-4" />
+                  <h2 className="font-secondary text-2xl">Kombin Yükle</h2>
+                  <p className="text-zinc-500 mt-2">Giydirmek istediğiniz kıyafet fotoğrafını yükleyin</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8 max-w-3xl mx-auto">
+                  {/* Selected Character Preview */}
+                  <div>
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Seçilen Karakter</h3>
+                    <div className="relative">
+                      <img 
+                        src={selectedCharacter?.base_image} 
+                        alt={selectedCharacter?.name}
+                        className="w-full aspect-[3/4] object-cover"
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+                        <span className="font-medium">{selectedCharacter?.name}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Outfit Upload */}
+                  <div>
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Kombin</h3>
+                    {outfitImage ? (
+                      <div className="relative">
+                        <img 
+                          src={outfitImage} 
+                          alt="Outfit"
+                          className="w-full aspect-[3/4] object-cover"
+                        />
+                        <button
+                          onClick={() => setOutfitImage(null)}
+                          className="absolute top-2 right-2 w-8 h-8 bg-black/60 flex items-center justify-center hover:bg-black/80"
+                          data-testid="clear-outfit-btn"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onDrop={handleDrop}
+                        onDragOver={(e) => e.preventDefault()}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="upload-zone aspect-[3/4] flex flex-col items-center justify-center cursor-pointer"
+                        data-testid="outfit-upload-zone"
+                      >
+                        <Upload className="w-10 h-10 text-zinc-500 mb-4" />
+                        <span className="text-sm text-zinc-400">Sürükle bırak veya tıkla</span>
+                        <span className="text-xs text-zinc-600 mt-2">PNG, JPG</span>
+                      </div>
+                    )}
+                    
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    
+                    <div className="mt-3">
+                      <Input
+                        placeholder="veya URL yapıştır"
+                        onChange={(e) => handleUrlInput(e.target.value)}
+                        className="bg-transparent border-zinc-700 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation */}
+                <div className="flex justify-between max-w-3xl mx-auto pt-6">
+                  <Button
+                    variant="ghost"
+                    onClick={() => goToStep(1)}
+                    className="text-zinc-400"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Geri
+                  </Button>
+                  <Button
+                    onClick={() => setStep(3)}
+                    disabled={!outfitImage}
+                    className="bg-primary hover:bg-primary-hover"
+                    data-testid="next-to-pose-btn"
+                  >
+                    Poz Seç
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 3: Select Pose */}
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-6"
+              >
+                <div className="text-center mb-8">
+                  <PersonStanding className="w-12 h-12 mx-auto text-accent mb-4" />
+                  <h2 className="font-secondary text-2xl">Poz Seç</h2>
+                  <p className="text-zinc-500 mt-2">Karakterin hangi pozda görünmesini istiyorsunuz?</p>
+                </div>
+
+                {/* Preview Cards */}
+                <div className="flex justify-center gap-6 mb-8">
+                  <div className="w-40">
+                    <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Karakter</h4>
+                    <img src={selectedCharacter?.base_image} alt="" className="w-full aspect-[3/4] object-cover" />
+                  </div>
+                  <div className="flex items-center">
+                    <ArrowRight className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="w-40">
+                    <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Kombin</h4>
+                    <img src={outfitImage} alt="" className="w-full aspect-[3/4] object-cover" />
+                  </div>
+                </div>
+
+                {/* Pose Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-w-4xl mx-auto">
+                  {POSE_PRESETS.map((pose) => (
+                    <motion.button
+                      key={pose.id}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setSelectedPose(pose.id)}
+                      className={`p-4 text-left transition-all border ${
+                        selectedPose === pose.id
+                          ? "border-primary bg-primary/10"
+                          : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+                      }`}
+                      data-testid={`pose-${pose.id}`}
+                    >
+                      <div className="text-2xl mb-2">{pose.icon}</div>
+                      <h4 className="font-medium text-sm">{pose.name}</h4>
+                      <p className="text-xs text-zinc-500 mt-1">{pose.description}</p>
+                      {selectedPose === pose.id && (
+                        <Check className="w-4 h-4 text-primary absolute top-2 right-2" />
+                      )}
+                    </motion.button>
+                  ))}
+                </div>
+
+                {/* Navigation */}
+                <div className="flex justify-between max-w-4xl mx-auto pt-6">
+                  <Button
+                    variant="ghost"
+                    onClick={() => goToStep(2)}
+                    className="text-zinc-400"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Geri
+                  </Button>
+                  <Button
+                    onClick={generateResult}
+                    className="bg-primary hover:bg-primary-hover px-8"
+                    data-testid="generate-btn"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Oluştur
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 4: Result */}
+            {step === 4 && (
+              <motion.div
+                key="step4"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
-                className="result-container relative max-w-lg w-full"
-                data-testid="result-container"
+                className="space-y-6"
               >
-                <img 
-                  src={resultImage} 
-                  alt="Result" 
-                  className="w-full aspect-[3/4] object-cover"
-                />
-                <div className="result-badge">
-                  <Check className="w-3 h-3 inline mr-1" />
-                  Applied
+                <div className="text-center mb-8">
+                  <Sparkles className="w-12 h-12 mx-auto text-primary mb-4" />
+                  <h2 className="font-secondary text-2xl">
+                    {processing ? "Oluşturuluyor..." : "Sonuç"}
+                  </h2>
                 </div>
-                <div className="absolute bottom-4 left-4 right-4 flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="flex-1 bg-white/10 hover:bg-white/20 text-white border-0"
-                    onClick={() => setResultImage(null)}
-                    data-testid="clear-result-btn"
-                  >
-                    Clear
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1 bg-primary hover:bg-primary-hover text-white"
-                    data-testid="download-result-btn"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Save
-                  </Button>
-                </div>
-              </motion.div>
-            ) : selectedCharacter ? (
-              <motion.div
-                key="preview"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="relative max-w-lg w-full"
-                data-testid="character-preview"
-              >
-                <img 
-                  src={selectedCharacter.base_image} 
-                  alt={selectedCharacter.name}
-                  className="w-full aspect-[3/4] object-cover"
-                />
-                <div className="absolute top-4 left-4 px-3 py-1 bg-black/70 backdrop-blur-sm">
-                  <span className="font-mono text-xs uppercase tracking-wider">{selectedCharacter.name}</span>
-                </div>
-                
-                {/* Lock indicators */}
-                <div className="absolute top-4 right-4 flex flex-col gap-2">
-                  {settings.face_lock && (
-                    <div className="w-8 h-8 bg-black/70 backdrop-blur-sm flex items-center justify-center" title="Face Locked">
-                      <Lock className="w-4 h-4 text-primary" />
+
+                <div className="max-w-4xl mx-auto">
+                  {processing ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <div className="relative w-24 h-24 mb-8">
+                        <div className="absolute inset-0 border-4 border-zinc-800 animate-spin" style={{ animationDuration: "3s" }} />
+                        <div className="absolute inset-2 border-4 border-primary animate-spin" style={{ animationDuration: "2s", animationDirection: "reverse" }} />
+                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-primary" />
+                      </div>
+                      <p className="text-zinc-400">AI görüntü oluşturuyor...</p>
+                      <p className="text-xs text-zinc-600 mt-2">Bu işlem 30-60 saniye sürebilir</p>
                     </div>
-                  )}
-                  {settings.pose_lock && (
-                    <div className="w-8 h-8 bg-black/70 backdrop-blur-sm flex items-center justify-center" title="Pose Locked">
-                      <Lock className="w-4 h-4 text-secondary" />
+                  ) : resultImage ? (
+                    <div className="grid grid-cols-3 gap-6">
+                      {/* Original Character */}
+                      <div>
+                        <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Orijinal</h4>
+                        <img src={selectedCharacter?.base_image} alt="" className="w-full aspect-[3/4] object-cover" />
+                      </div>
+                      
+                      {/* Result */}
+                      <div>
+                        <h4 className="text-xs font-mono text-primary mb-2 text-center">Sonuç</h4>
+                        <div className="relative">
+                          <img src={resultImage} alt="Result" className="w-full aspect-[3/4] object-cover" />
+                          <div className="absolute top-2 right-2 px-2 py-1 bg-success text-xs font-mono">
+                            AI
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Outfit Used */}
+                      <div>
+                        <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Kombin</h4>
+                        <img src={outfitImage} alt="" className="w-full aspect-[3/4] object-cover" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 text-zinc-500">
+                      Sonuç yüklenemedi
                     </div>
                   )}
                 </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="empty-state"
-                data-testid="empty-canvas"
-              >
-                <User className="w-16 h-16" />
-                <h3 className="font-secondary text-xl text-zinc-400 mt-4">Select a Character</h3>
-                <p className="text-sm text-zinc-600 mt-2 max-w-xs">
-                  Choose a character from the left panel to start dressing
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
 
-        {/* Part Selector */}
-        <div className="p-4 border-t border-zinc-800/30">
-          <div className="flex items-center gap-2 flex-wrap justify-center">
-            {PARTS.map((part) => (
-              <button
-                key={part.id}
-                onClick={() => togglePart(part.id)}
-                className={`part-toggle ${selectedParts.includes(part.id) ? "active" : ""}`}
-                data-testid={`part-toggle-${part.id}`}
-              >
-                {part.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Apply Button */}
-        <div className="p-6 border-t border-zinc-800/30">
-          <Button
-            onClick={applyDressing}
-            disabled={!selectedCharacter || !selectedOutfit || processing}
-            className="w-full h-14 bg-primary hover:bg-primary-hover text-white font-mono uppercase tracking-widest btn-primary disabled:opacity-50"
-            data-testid="apply-dressing-btn"
-          >
-            {processing ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                Apply Outfit
-                <ArrowRight className="w-5 h-5 ml-3" />
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Right Panel - Outfits */}
-      <div className="border-l border-zinc-800/50 bg-[#0a0a0a] flex flex-col">
-        <div className="p-6 border-b border-zinc-800/50">
-          <div className="flex items-center gap-3">
-            <Shirt className="w-5 h-5 text-zinc-400" />
-            <h2 className="font-secondary text-xl">Outfits</h2>
-          </div>
-          <p className="text-xs text-zinc-500 mt-2 font-mono uppercase tracking-wider">
-            Select an outfit
-          </p>
-        </div>
-        
-        <ScrollArea className="flex-1">
-          <div className="p-4 grid grid-cols-2 gap-3">
-            {outfits.map((outfit) => (
-              <motion.div
-                key={outfit.id}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedOutfit(outfit)}
-                className={`asset-card cursor-pointer ${selectedOutfit?.id === outfit.id ? "selected" : ""}`}
-                data-testid={`outfit-card-${outfit.id}`}
-              >
-                <img src={outfit.source_image} alt={outfit.name} loading="lazy" />
-                <div className="overlay flex flex-col justify-end p-3">
-                  <span className="text-xs font-medium truncate">{outfit.name}</span>
-                </div>
-                {selectedOutfit?.id === outfit.id && (
-                  <div className="absolute top-2 right-2 w-6 h-6 bg-primary flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
+                {/* Actions */}
+                {!processing && (
+                  <div className="flex justify-center gap-4 pt-6">
+                    <Button
+                      variant="outline"
+                      onClick={reset}
+                      className="border-zinc-700"
+                      data-testid="start-over-btn"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Baştan Başla
+                    </Button>
+                    <Button
+                      onClick={() => setStep(2)}
+                      className="bg-zinc-800 hover:bg-zinc-700"
+                    >
+                      Farklı Kombin Dene
+                    </Button>
+                    <Button
+                      onClick={() => setStep(3)}
+                      className="bg-primary hover:bg-primary-hover"
+                    >
+                      Farklı Poz Dene
+                    </Button>
                   </div>
                 )}
               </motion.div>
-            ))}
-          </div>
-        </ScrollArea>
-
-        {/* Quick Settings */}
-        <div className="p-4 border-t border-zinc-800/50">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">Precision</span>
-              <Switch 
-                checked={settings.precision_mode}
-                onCheckedChange={(v) => setSettings(s => ({...s, precision_mode: v}))}
-                data-testid="precision-mode-switch"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">Face Lock</span>
-              <Switch 
-                checked={settings.face_lock}
-                onCheckedChange={(v) => setSettings(s => ({...s, face_lock: v}))}
-                data-testid="face-lock-switch"
-              />
-            </div>
-          </div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

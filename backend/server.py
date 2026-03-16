@@ -148,6 +148,132 @@ Always respond with valid JSON containing:
 
 # ===== AI IMAGE PROCESSING WITH GEMINI NANO BANANA =====
 
+# Pose descriptions for AI
+POSE_PROMPTS = {
+    "original": "Keep the exact same pose as the original person",
+    "standing_front": "Standing straight, facing the camera directly, arms relaxed at sides",
+    "standing_side": "Standing in profile view, looking to the side",
+    "walking": "Natural walking pose, one foot slightly forward, arms swinging naturally",
+    "sitting": "Sitting on a chair or stool, relaxed posture",
+    "leaning": "Leaning casually against a wall, relaxed stance",
+    "arms_crossed": "Standing with arms crossed over chest, confident pose",
+    "hands_pocket": "Standing relaxed with hands in pockets",
+    "fashion_pose": "Professional fashion model pose, dynamic and stylish",
+    "casual": "Natural relaxed standing pose, casual and comfortable",
+    "confident": "Power pose, standing tall with confident body language"
+}
+
+async def generate_with_pose(character_image: str, outfit_image: str, pose: str, character_name: str = "") -> Dict[str, Any]:
+    """
+    Generate image with specific pose
+    """
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        import httpx
+        
+        pose_instruction = POSE_PROMPTS.get(pose, POSE_PROMPTS["original"])
+        keep_original_pose = pose == "original"
+        
+        prompt = f"""VIRTUAL CLOTHING TRANSFER TASK:
+
+I'm showing you TWO images:
+- IMAGE 1: A PERSON (reference for identity)
+- IMAGE 2: An OUTFIT/CLOTHING (reference for clothes)
+
+YOUR TASK: Create a new image showing the SAME PERSON from Image 1 wearing the EXACT CLOTHES from Image 2.
+
+IDENTITY RULES (CRITICAL - MUST FOLLOW):
+- Face: IDENTICAL to Image 1 - same facial features, expression, skin tone
+- Hair: IDENTICAL to Image 1 - same style, color, length
+- Body: Same body type and proportions as Image 1
+
+CLOTHING RULES:
+- Apply the EXACT clothing from Image 2
+- Match colors, patterns, style EXACTLY as shown in Image 2
+- Clothes should fit naturally on the person's body
+
+POSE: {pose_instruction}
+{"(Keep the original pose from Image 1)" if keep_original_pose else "(Apply this new pose while keeping identity)"}
+
+BACKGROUND: Clean, neutral studio background
+
+OUTPUT: A single photorealistic fashion photograph."""
+
+        # Prepare images
+        images_to_send = []
+        
+        # Character image
+        char_base64 = character_image
+        if character_image.startswith('http'):
+            async with httpx.AsyncClient() as client:
+                response = await client.get(character_image, timeout=30)
+                if response.status_code == 200:
+                    char_base64 = base64.b64encode(response.content).decode('utf-8')
+                else:
+                    return {"result_image": character_image, "status": "error", "message": "Could not download character image"}
+        elif character_image.startswith('data:'):
+            char_base64 = character_image.split(',')[1] if ',' in character_image else character_image
+        
+        images_to_send.append(ImageContent(char_base64))
+        
+        # Outfit image
+        outfit_base64 = outfit_image
+        if outfit_image.startswith('http'):
+            async with httpx.AsyncClient() as client:
+                response = await client.get(outfit_image, timeout=30)
+                if response.status_code == 200:
+                    outfit_base64 = base64.b64encode(response.content).decode('utf-8')
+        elif outfit_image.startswith('data:'):
+            outfit_base64 = outfit_image.split(',')[1] if ',' in outfit_image else outfit_image
+        
+        if not outfit_base64.startswith('http'):
+            images_to_send.append(ImageContent(outfit_base64))
+        
+        # Initialize Nano Banana
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"generate-{uuid.uuid4()}",
+            system_message="You are an expert virtual fashion AI. You transfer clothing from one image onto a person from another image while perfectly preserving their identity."
+        )
+        chat.with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
+        
+        msg = UserMessage(text=prompt, file_contents=images_to_send)
+        
+        logger.info(f"Generating with pose: {pose}")
+        text_response, images = await chat.send_message_multimodal_response(msg)
+        
+        logger.info(f"Response text: {text_response[:50] if text_response else 'None'}")
+        logger.info(f"Images count: {len(images) if images else 0}")
+        
+        if images and len(images) > 0:
+            img = images[0]
+            if isinstance(img, dict):
+                mime = img.get('mime_type', 'image/png')
+                data = img.get('data', '')
+                if data:
+                    return {"result_image": f"data:{mime};base64,{data}", "status": "success", "message": "AI generated"}
+            elif isinstance(img, str):
+                return {"result_image": f"data:image/png;base64,{img}", "status": "success", "message": "AI generated"}
+            elif isinstance(img, bytes):
+                encoded = base64.b64encode(img).decode('utf-8')
+                return {"result_image": f"data:image/png;base64,{encoded}", "status": "success", "message": "AI generated"}
+        
+        return {"result_image": character_image, "status": "fallback", "message": "No image generated"}
+            
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Generation error: {error_msg}")
+        
+        if "budget" in error_msg.lower() or "exceeded" in error_msg.lower():
+            return {
+                "result_image": character_image, 
+                "status": "budget_exceeded", 
+                "message": "Universal Key bakiyesi yetersiz. Profile → Universal Key → Add Balance"
+            }
+        
+        return {"result_image": character_image, "status": "error", "message": f"Hata: {error_msg[:80]}"}
+
+
 async def generate_outfit_image(character_image: str, outfit_image: str, outfit_name: str, parts: List[str], settings: Dict) -> Dict[str, Any]:
     """
     Virtual try-on: Apply outfit from outfit_image to person in character_image
@@ -456,7 +582,7 @@ async def mock_outfit_extraction(image_data: str) -> Dict[str, str]:
 
 @api_router.get("/")
 async def root():
-    return {"message": "AI Virtual Dressing Room API", "version": "1.0.0"}
+    return {"message": "AI Virtual Dressing Room API", "version": "2.0.0"}
 
 @api_router.get("/health")
 async def health_check():
@@ -465,6 +591,37 @@ async def health_check():
         "llm_configured": bool(EMERGENT_LLM_KEY),
         "image_engine": "Gemini Nano Banana"
     }
+
+# ----- DIRECT GENERATION (NEW SIMPLIFIED FLOW) -----
+
+class GenerateRequest(BaseModel):
+    character_image: str
+    outfit_image: str
+    pose: str = "original"
+    character_name: str = ""
+
+class GenerateResponse(BaseModel):
+    result_image: str
+    status: str
+    message: Optional[str] = None
+
+@api_router.post("/generate", response_model=GenerateResponse)
+async def generate_image(request: GenerateRequest):
+    """Generate image with outfit on character - no saving required"""
+    logger.info(f"Generate request - pose: {request.pose}")
+    
+    result = await generate_with_pose(
+        character_image=request.character_image,
+        outfit_image=request.outfit_image,
+        pose=request.pose,
+        character_name=request.character_name
+    )
+    
+    return GenerateResponse(
+        result_image=result.get("result_image", request.character_image),
+        status=result.get("status", "unknown"),
+        message=result.get("message")
+    )
 
 # ----- CHARACTER ROUTES -----
 

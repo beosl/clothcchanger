@@ -3,19 +3,15 @@ import { motion } from "framer-motion";
 import { 
   Shirt, 
   Users, 
-  Library, 
-  Scissors, 
   Settings,
   Sparkles
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
-  { path: "/", icon: Shirt, label: "Dressing Room" },
-  { path: "/characters", icon: Users, label: "Characters" },
-  { path: "/outfits", icon: Library, label: "Outfit Library" },
-  { path: "/extract", icon: Scissors, label: "Extract Outfit" },
-  { path: "/settings", icon: Settings, label: "Settings" },
+  { path: "/", icon: Shirt, label: "Giysi Değiştir" },
+  { path: "/characters", icon: Users, label: "Karakterler" },
+  { path: "/settings", icon: Settings, label: "Ayarlar" },
 ];
 
 export default function Layout() {

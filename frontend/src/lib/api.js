@@ -14,16 +14,8 @@ export const api = {
   deleteCharacter: (id) => axios.delete(`${API}/characters/${id}`),
   updateCharacter: (id, name) => axios.patch(`${API}/characters/${id}`, null, { params: { name } }),
   
-  // Outfits
-  getOutfits: () => axios.get(`${API}/outfits`),
-  getOutfit: (id) => axios.get(`${API}/outfits/${id}`),
-  createOutfit: (data) => axios.post(`${API}/outfits`, data),
-  deleteOutfit: (id) => axios.delete(`${API}/outfits/${id}`),
-  updateOutfit: (id, name) => axios.patch(`${API}/outfits/${id}`, null, { params: { name } }),
-  
-  // Dressing
-  applyDressing: (data) => axios.post(`${API}/dress`, data),
-  getDressingHistory: () => axios.get(`${API}/dressing-history`),
+  // Direct Generation (no saving)
+  generateWithPose: (data) => axios.post(`${API}/generate`, data, { timeout: 120000 }),
   
   // Settings
   getSettings: () => axios.get(`${API}/settings`),

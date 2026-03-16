@@ -5,8 +5,6 @@ import { Toaster } from "@/components/ui/sonner";
 import Layout from "@/components/Layout";
 import DressingRoom from "@/pages/DressingRoom";
 import CharacterManager from "@/pages/CharacterManager";
-import OutfitLibrary from "@/pages/OutfitLibrary";
-import OutfitExtractor from "@/pages/OutfitExtractor";
 import SettingsPage from "@/pages/SettingsPage";
 
 function App() {
@@ -17,8 +15,6 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<DressingRoom />} />
             <Route path="characters" element={<CharacterManager />} />
-            <Route path="outfits" element={<OutfitLibrary />} />
-            <Route path="extract" element={<OutfitExtractor />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
