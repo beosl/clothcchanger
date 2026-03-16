@@ -11,10 +11,13 @@ import {
   X,
   Sparkles,
   PersonStanding,
-  RotateCcw
+  RotateCcw,
+  Lock,
+  Unlock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
@@ -43,6 +46,14 @@ const POSE_PRESETS = [
   { id: "confident", name: "Özgüvenli", description: "Güçlü ve özgüvenli duruş", icon: "💫" },
 ];
 
+// Lock settings
+const LOCK_SETTINGS = [
+  { id: "face_lock", name: "Yüz", icon: "👤" },
+  { id: "body_lock", name: "Vücut", icon: "🧍" },
+  { id: "background_lock", name: "Arkaplan", icon: "🖼️" },
+  { id: "lighting_lock", name: "Işık", icon: "💡" },
+];
+
 export default function DressingRoom() {
   const [step, setStep] = useState(1); // 1: Character, 2: Outfit+Parts, 3: Pose, 4: Result
   const [characters, setCharacters] = useState([]);
@@ -50,6 +61,13 @@ export default function DressingRoom() {
   const [outfitImage, setOutfitImage] = useState(null);
   const [selectedParts, setSelectedParts] = useState(["upper", "lower"]);
   const [selectedPose, setSelectedPose] = useState("original");
+  const [settings, setSettings] = useState({
+    face_lock: true,
+    body_lock: true,
+    background_lock: true,
+    lighting_lock: true,
+    pose_lock: true
+  });
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -154,6 +172,7 @@ export default function DressingRoom() {
         outfit_image: outfitImage,
         pose: selectedPose,
         parts: selectedParts,
+        settings: settings,
         character_name: selectedCharacter.name
       });
 
@@ -175,12 +194,23 @@ export default function DressingRoom() {
     setProcessing(false);
   };
 
+  const toggleSetting = (settingId) => {
+    setSettings(prev => ({ ...prev, [settingId]: !prev[settingId] }));
+  };
+
   const reset = () => {
     setStep(1);
     setSelectedCharacter(null);
     setOutfitImage(null);
     setSelectedParts(["upper", "lower"]);
     setSelectedPose("original");
+    setSettings({
+      face_lock: true,
+      body_lock: true,
+      background_lock: true,
+      lighting_lock: true,
+      pose_lock: true
+    });
     setResultImage(null);
   };
 
@@ -465,6 +495,35 @@ export default function DressingRoom() {
                       )}
                     </motion.button>
                   ))}
+                </div>
+
+                {/* Lock Settings */}
+                <div className="max-w-4xl mx-auto mt-8 p-4 bg-zinc-900/50 border border-zinc-800">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Lock className="w-4 h-4 text-primary" />
+                    <h3 className="text-sm font-mono uppercase tracking-wider">Koruma Ayarları</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {LOCK_SETTINGS.map((setting) => (
+                      <div 
+                        key={setting.id}
+                        className="flex items-center justify-between p-3 bg-zinc-800/50 border border-zinc-700"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{setting.icon}</span>
+                          <span className="text-sm">{setting.name}</span>
+                        </div>
+                        <Switch
+                          checked={settings[setting.id]}
+                          onCheckedChange={() => toggleSetting(setting.id)}
+                          data-testid={`lock-${setting.id}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-600 mt-3 text-center">
+                    Açık olan ayarlar orijinalden korunur
+                  </p>
                 </div>
 
                 {/* Navigation */}

@@ -173,9 +173,10 @@ PART_NAMES = {
     "accessories": "accessories (bag, hat, jewelry, belt, scarf)"
 }
 
-async def generate_with_pose(character_image: str, outfit_image: str, pose: str, parts: List[str] = None, character_name: str = "") -> Dict[str, Any]:
+async def generate_with_pose(character_image: str, outfit_image: str, pose: str, parts: List[str] = None, settings: Dict = None, character_name: str = "") -> Dict[str, Any]:
     """
     Generate image with specific pose and selected clothing parts
+    Settings: face_lock, body_lock, background_lock, lighting_lock, pose_lock
     """
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
@@ -184,41 +185,97 @@ async def generate_with_pose(character_image: str, outfit_image: str, pose: str,
         if parts is None:
             parts = ["upper", "lower"]
         
+        if settings is None:
+            settings = {
+                "face_lock": True,
+                "body_lock": True,
+                "background_lock": True,
+                "lighting_lock": True,
+                "pose_lock": True
+            }
+        
         pose_instruction = POSE_PROMPTS.get(pose, POSE_PROMPTS["original"])
-        keep_original_pose = pose == "original"
+        keep_original_pose = pose == "original" or settings.get("pose_lock", True)
         
         # Build parts description
         parts_to_change = [PART_NAMES.get(p, p) for p in parts]
         parts_description = ", ".join(parts_to_change)
         
-        prompt = f"""VIRTUAL CLOTHING TRANSFER TASK:
+        # Build strict lock instructions
+        lock_instructions = ""
+        
+        if settings.get("face_lock", True):
+            lock_instructions += """
+🔒 FACE LOCK (CRITICAL - DO NOT VIOLATE):
+- Face must be PIXEL-PERFECT identical to Image 1
+- Same exact facial features, eyes, nose, mouth, eyebrows
+- Same exact skin tone and complexion
+- Same exact expression
+- NO modifications, NO enhancements, NO changes whatsoever to the face
+"""
+        
+        if settings.get("body_lock", True):
+            lock_instructions += """
+🔒 BODY LOCK (CRITICAL):
+- Body shape and proportions must be IDENTICAL to Image 1
+- Same body type, same height ratio, same build
+- NO body modifications
+"""
+        
+        if settings.get("background_lock", True):
+            lock_instructions += """
+🔒 BACKGROUND LOCK (CRITICAL):
+- Keep the EXACT SAME background from Image 1
+- Same location, same objects, same colors, same everything
+- Do NOT change, replace, or modify the background in ANY way
+- The background must be a perfect copy from the original
+"""
+        
+        if settings.get("lighting_lock", True):
+            lock_instructions += """
+🔒 LIGHTING LOCK (CRITICAL):
+- Keep the EXACT SAME lighting from Image 1
+- Same light direction, same shadows, same brightness
+- Same color temperature, same contrast
+- Clothes must match the original lighting conditions
+- NO new light sources, NO lighting changes
+"""
+        
+        prompt = f"""PHOTOREALISTIC VIRTUAL TRY-ON TASK
 
 I'm showing you TWO images:
-- IMAGE 1: A PERSON (reference for identity)
-- IMAGE 2: An OUTFIT/CLOTHING (reference for clothes)
+- IMAGE 1: The PERSON (this is your reference for identity, pose, background, lighting)
+- IMAGE 2: The CLOTHING (only use this for the clothes to apply)
 
-YOUR TASK: Create a new image showing the SAME PERSON from Image 1 wearing SPECIFIC CLOTHING PARTS from Image 2.
+MISSION: Create a new image where the person from Image 1 wears the clothes from Image 2.
+ONLY CHANGE: {parts_description}
+KEEP EVERYTHING ELSE EXACTLY THE SAME AS IMAGE 1.
 
-CLOTHING PARTS TO TRANSFER: {parts_description}
-(Only change these parts, keep everything else from the original person)
+{lock_instructions}
 
-IDENTITY RULES (CRITICAL - MUST FOLLOW):
-- Face: IDENTICAL to Image 1 - same facial features, expression, skin tone
-- Hair: IDENTICAL to Image 1 - same style, color, length
-- Body: Same body type and proportions as Image 1
+CLOTHING APPLICATION RULES:
+- Apply ONLY these clothing parts from Image 2: {parts_description}
+- Match the exact colors, patterns, textures, and style from Image 2
+- Clothes must fit naturally on the person's body
+- Clothes must respect the original lighting (shadows, highlights)
+- Any clothing NOT in the list stays exactly as in Image 1
 
-CLOTHING RULES:
-- ONLY change: {parts_description}
-- Match colors, patterns, style EXACTLY as shown in Image 2
-- Clothes should fit naturally on the person's body
-- Keep any clothing NOT in the list unchanged from Image 1
+{"POSE: Keep the EXACT same pose from Image 1 - do not change body position" if keep_original_pose else f"POSE: {pose_instruction}"}
 
-POSE: {pose_instruction}
-{"(Keep the original pose from Image 1)" if keep_original_pose else "(Apply this new pose while keeping identity)"}
+QUALITY REQUIREMENTS:
+- Output must look like a REAL PHOTOGRAPH, not AI-generated
+- No artifacts, no blurring, no distortion
+- Professional fashion photography quality
+- The person should look natural wearing the new clothes
 
-BACKGROUND: Clean, neutral studio background
+FINAL CHECK BEFORE OUTPUT:
+✓ Is the face 100% identical to Image 1?
+✓ Is the background 100% identical to Image 1?
+✓ Is the lighting 100% identical to Image 1?
+✓ Is the body shape 100% identical to Image 1?
+✓ Are only the specified clothing parts changed?
 
-OUTPUT: A single photorealistic fashion photograph."""
+OUTPUT: A single photorealistic image."""
 
         # Prepare images
         images_to_send = []
@@ -253,18 +310,17 @@ OUTPUT: A single photorealistic fashion photograph."""
         # Initialize Nano Banana
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
-            session_id=f"generate-{uuid.uuid4()}",
-            system_message="You are an expert virtual fashion AI. You transfer clothing from one image onto a person from another image while perfectly preserving their identity."
+            session_id=f"tryon-{uuid.uuid4()}",
+            system_message="You are a photorealistic virtual try-on AI. Your specialty is changing ONLY the clothes on a person while keeping their face, body, background, and lighting PERFECTLY IDENTICAL to the original. You never modify anything except the specified clothing parts."
         )
         chat.with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
         
         msg = UserMessage(text=prompt, file_contents=images_to_send)
         
-        logger.info(f"Generating with pose: {pose}")
+        logger.info(f"Generating - pose: {pose}, parts: {parts}, locks: face={settings.get('face_lock')}, bg={settings.get('background_lock')}")
         text_response, images = await chat.send_message_multimodal_response(msg)
         
-        logger.info(f"Response text: {text_response[:50] if text_response else 'None'}")
-        logger.info(f"Images count: {len(images) if images else 0}")
+        logger.info(f"Response: {text_response[:50] if text_response else 'None'}, images: {len(images) if images else 0}")
         
         if images and len(images) > 0:
             img = images[0]
@@ -615,11 +671,19 @@ async def health_check():
 
 # ----- DIRECT GENERATION (NEW SIMPLIFIED FLOW) -----
 
+class GenerateSettings(BaseModel):
+    face_lock: bool = True
+    body_lock: bool = True
+    background_lock: bool = True
+    lighting_lock: bool = True
+    pose_lock: bool = True
+
 class GenerateRequest(BaseModel):
     character_image: str
     outfit_image: str
     pose: str = "original"
     parts: List[str] = ["upper", "lower"]
+    settings: Optional[GenerateSettings] = None
     character_name: str = ""
 
 class GenerateResponse(BaseModel):
@@ -629,14 +693,28 @@ class GenerateResponse(BaseModel):
 
 @api_router.post("/generate", response_model=GenerateResponse)
 async def generate_image(request: GenerateRequest):
-    """Generate image with outfit on character - no saving required"""
-    logger.info(f"Generate request - pose: {request.pose}, parts: {request.parts}")
+    """Generate image with outfit on character - with lock settings"""
+    
+    # Default settings if not provided
+    settings_dict = {
+        "face_lock": True,
+        "body_lock": True,
+        "background_lock": True,
+        "lighting_lock": True,
+        "pose_lock": request.pose == "original"
+    }
+    
+    if request.settings:
+        settings_dict = request.settings.model_dump()
+    
+    logger.info(f"Generate - pose: {request.pose}, parts: {request.parts}, settings: {settings_dict}")
     
     result = await generate_with_pose(
         character_image=request.character_image,
         outfit_image=request.outfit_image,
         pose=request.pose,
         parts=request.parts,
+        settings=settings_dict,
         character_name=request.character_name
     )
     
