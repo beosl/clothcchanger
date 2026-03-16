@@ -163,16 +163,33 @@ POSE_PROMPTS = {
     "confident": "Power pose, standing tall with confident body language"
 }
 
-async def generate_with_pose(character_image: str, outfit_image: str, pose: str, character_name: str = "") -> Dict[str, Any]:
+# Part descriptions for AI
+PART_NAMES = {
+    "upper": "upper body clothing (shirt, t-shirt, blouse, sweater, top)",
+    "lower": "lower body clothing (pants, trousers, jeans, skirt, shorts)",
+    "dress": "full dress or one-piece outfit",
+    "jacket": "jacket, coat, blazer, cardigan, outerwear",
+    "shoes": "footwear (shoes, sneakers, boots, heels, sandals)",
+    "accessories": "accessories (bag, hat, jewelry, belt, scarf)"
+}
+
+async def generate_with_pose(character_image: str, outfit_image: str, pose: str, parts: List[str] = None, character_name: str = "") -> Dict[str, Any]:
     """
-    Generate image with specific pose
+    Generate image with specific pose and selected clothing parts
     """
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
         import httpx
         
+        if parts is None:
+            parts = ["upper", "lower"]
+        
         pose_instruction = POSE_PROMPTS.get(pose, POSE_PROMPTS["original"])
         keep_original_pose = pose == "original"
+        
+        # Build parts description
+        parts_to_change = [PART_NAMES.get(p, p) for p in parts]
+        parts_description = ", ".join(parts_to_change)
         
         prompt = f"""VIRTUAL CLOTHING TRANSFER TASK:
 
@@ -180,7 +197,10 @@ I'm showing you TWO images:
 - IMAGE 1: A PERSON (reference for identity)
 - IMAGE 2: An OUTFIT/CLOTHING (reference for clothes)
 
-YOUR TASK: Create a new image showing the SAME PERSON from Image 1 wearing the EXACT CLOTHES from Image 2.
+YOUR TASK: Create a new image showing the SAME PERSON from Image 1 wearing SPECIFIC CLOTHING PARTS from Image 2.
+
+CLOTHING PARTS TO TRANSFER: {parts_description}
+(Only change these parts, keep everything else from the original person)
 
 IDENTITY RULES (CRITICAL - MUST FOLLOW):
 - Face: IDENTICAL to Image 1 - same facial features, expression, skin tone
@@ -188,9 +208,10 @@ IDENTITY RULES (CRITICAL - MUST FOLLOW):
 - Body: Same body type and proportions as Image 1
 
 CLOTHING RULES:
-- Apply the EXACT clothing from Image 2
+- ONLY change: {parts_description}
 - Match colors, patterns, style EXACTLY as shown in Image 2
 - Clothes should fit naturally on the person's body
+- Keep any clothing NOT in the list unchanged from Image 1
 
 POSE: {pose_instruction}
 {"(Keep the original pose from Image 1)" if keep_original_pose else "(Apply this new pose while keeping identity)"}
@@ -598,6 +619,7 @@ class GenerateRequest(BaseModel):
     character_image: str
     outfit_image: str
     pose: str = "original"
+    parts: List[str] = ["upper", "lower"]
     character_name: str = ""
 
 class GenerateResponse(BaseModel):
@@ -608,12 +630,13 @@ class GenerateResponse(BaseModel):
 @api_router.post("/generate", response_model=GenerateResponse)
 async def generate_image(request: GenerateRequest):
     """Generate image with outfit on character - no saving required"""
-    logger.info(f"Generate request - pose: {request.pose}")
+    logger.info(f"Generate request - pose: {request.pose}, parts: {request.parts}")
     
     result = await generate_with_pose(
         character_image=request.character_image,
         outfit_image=request.outfit_image,
         pose=request.pose,
+        parts=request.parts,
         character_name=request.character_name
     )
     

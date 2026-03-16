@@ -14,10 +14,19 @@ import {
   RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import api from "@/lib/api";
+
+// Clothing parts
+const CLOTHING_PARTS = [
+  { id: "upper", name: "Üst", description: "Tişört, gömlek, kazak", icon: "👕" },
+  { id: "lower", name: "Alt", description: "Pantolon, etek, şort", icon: "👖" },
+  { id: "dress", name: "Elbise", description: "Tek parça elbise", icon: "👗" },
+  { id: "jacket", name: "Ceket", description: "Mont, blazer, hırka", icon: "🧥" },
+  { id: "shoes", name: "Ayakkabı", description: "Spor, topuklu, bot", icon: "👟" },
+  { id: "accessories", name: "Aksesuar", description: "Çanta, şapka, takı", icon: "👜" },
+];
 
 // Preset poses
 const POSE_PRESETS = [
@@ -35,10 +44,11 @@ const POSE_PRESETS = [
 ];
 
 export default function DressingRoom() {
-  const [step, setStep] = useState(1); // 1: Character, 2: Outfit, 3: Pose, 4: Result
+  const [step, setStep] = useState(1); // 1: Character, 2: Outfit+Parts, 3: Pose, 4: Result
   const [characters, setCharacters] = useState([]);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [outfitImage, setOutfitImage] = useState(null);
+  const [selectedParts, setSelectedParts] = useState(["upper", "lower"]);
   const [selectedPose, setSelectedPose] = useState("original");
   const [resultImage, setResultImage] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +61,6 @@ export default function DressingRoom() {
       const response = await api.getCharacters();
       setCharacters(response.data);
       
-      // Auto-seed if empty
       if (response.data.length === 0) {
         await api.seedData();
         const newResponse = await api.getCharacters();
@@ -97,6 +106,14 @@ export default function DressingRoom() {
     }
   };
 
+  const togglePart = (partId) => {
+    setSelectedParts(prev => 
+      prev.includes(partId) 
+        ? prev.filter(p => p !== partId)
+        : [...prev, partId]
+    );
+  };
+
   const selectCharacter = (char) => {
     setSelectedCharacter(char);
     setStep(2);
@@ -106,11 +123,12 @@ export default function DressingRoom() {
     if (stepNum === 1) {
       setSelectedCharacter(null);
       setOutfitImage(null);
+      setSelectedParts(["upper", "lower"]);
       setSelectedPose("original");
       setResultImage(null);
     } else if (stepNum === 2 && !selectedCharacter) {
       return;
-    } else if (stepNum === 3 && !outfitImage) {
+    } else if (stepNum === 3 && (!outfitImage || selectedParts.length === 0)) {
       return;
     }
     setStep(stepNum);
@@ -119,6 +137,10 @@ export default function DressingRoom() {
   const generateResult = async () => {
     if (!selectedCharacter || !outfitImage) {
       toast.error("Karakter ve kombin seçilmeli");
+      return;
+    }
+    if (selectedParts.length === 0) {
+      toast.error("En az bir giysi parçası seçin");
       return;
     }
 
@@ -131,6 +153,7 @@ export default function DressingRoom() {
         character_image: selectedCharacter.base_image,
         outfit_image: outfitImage,
         pose: selectedPose,
+        parts: selectedParts,
         character_name: selectedCharacter.name
       });
 
@@ -156,6 +179,7 @@ export default function DressingRoom() {
     setStep(1);
     setSelectedCharacter(null);
     setOutfitImage(null);
+    setSelectedParts(["upper", "lower"]);
     setSelectedPose("original");
     setResultImage(null);
   };
@@ -249,7 +273,7 @@ export default function DressingRoom() {
               </motion.div>
             )}
 
-            {/* Step 2: Upload Outfit */}
+            {/* Step 2: Upload Outfit + Select Parts */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -258,10 +282,10 @@ export default function DressingRoom() {
                 exit={{ opacity: 0, x: 20 }}
                 className="space-y-6"
               >
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                   <Shirt className="w-12 h-12 mx-auto text-secondary mb-4" />
-                  <h2 className="font-secondary text-2xl">Kombin Yükle</h2>
-                  <p className="text-zinc-500 mt-2">Giydirmek istediğiniz kıyafet fotoğrafını yükleyin</p>
+                  <h2 className="font-secondary text-2xl">Kombin Yükle & Parça Seç</h2>
+                  <p className="text-zinc-500 mt-2">Kombini yükleyin ve değiştirilecek parçaları seçin</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-8 max-w-3xl mx-auto">
@@ -330,6 +354,38 @@ export default function DressingRoom() {
                   </div>
                 </div>
 
+                {/* Part Selection */}
+                <div className="max-w-3xl mx-auto mt-8">
+                  <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-4 text-center">
+                    Değiştirilecek Parçalar
+                  </h3>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                    {CLOTHING_PARTS.map((part) => (
+                      <motion.button
+                        key={part.id}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => togglePart(part.id)}
+                        className={`p-3 text-center transition-all border ${
+                          selectedParts.includes(part.id)
+                            ? "border-primary bg-primary/20 text-white"
+                            : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                        }`}
+                        data-testid={`part-${part.id}`}
+                      >
+                        <div className="text-2xl mb-1">{part.icon}</div>
+                        <div className="text-xs font-medium">{part.name}</div>
+                        {selectedParts.includes(part.id) && (
+                          <Check className="w-3 h-3 mx-auto mt-1 text-primary" />
+                        )}
+                      </motion.button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-600 text-center mt-3">
+                    Seçili: {selectedParts.length} parça
+                  </p>
+                </div>
+
                 {/* Navigation */}
                 <div className="flex justify-between max-w-3xl mx-auto pt-6">
                   <Button
@@ -342,7 +398,7 @@ export default function DressingRoom() {
                   </Button>
                   <Button
                     onClick={() => setStep(3)}
-                    disabled={!outfitImage}
+                    disabled={!outfitImage || selectedParts.length === 0}
                     className="bg-primary hover:bg-primary-hover"
                     data-testid="next-to-pose-btn"
                   >
@@ -362,23 +418,26 @@ export default function DressingRoom() {
                 exit={{ opacity: 0, x: 20 }}
                 className="space-y-6"
               >
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                   <PersonStanding className="w-12 h-12 mx-auto text-accent mb-4" />
                   <h2 className="font-secondary text-2xl">Poz Seç</h2>
                   <p className="text-zinc-500 mt-2">Karakterin hangi pozda görünmesini istiyorsunuz?</p>
                 </div>
 
                 {/* Preview Cards */}
-                <div className="flex justify-center gap-6 mb-8">
-                  <div className="w-40">
-                    <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Karakter</h4>
+                <div className="flex justify-center items-center gap-4 mb-6">
+                  <div className="w-32">
+                    <h4 className="text-[10px] font-mono text-zinc-500 mb-2 text-center">KARAKTER</h4>
                     <img src={selectedCharacter?.base_image} alt="" className="w-full aspect-[3/4] object-cover" />
                   </div>
-                  <div className="flex items-center">
-                    <ArrowRight className="w-6 h-6 text-primary" />
+                  <div className="text-center">
+                    <ArrowRight className="w-5 h-5 text-primary mx-auto" />
+                    <div className="text-[10px] text-zinc-600 mt-1">
+                      {selectedParts.map(p => CLOTHING_PARTS.find(cp => cp.id === p)?.icon).join(" ")}
+                    </div>
                   </div>
-                  <div className="w-40">
-                    <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Kombin</h4>
+                  <div className="w-32">
+                    <h4 className="text-[10px] font-mono text-zinc-500 mb-2 text-center">KOMBİN</h4>
                     <img src={outfitImage} alt="" className="w-full aspect-[3/4] object-cover" />
                   </div>
                 </div>
@@ -391,7 +450,7 @@ export default function DressingRoom() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedPose(pose.id)}
-                      className={`p-4 text-left transition-all border ${
+                      className={`p-4 text-left transition-all border relative ${
                         selectedPose === pose.id
                           ? "border-primary bg-primary/10"
                           : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
@@ -444,6 +503,11 @@ export default function DressingRoom() {
                   <h2 className="font-secondary text-2xl">
                     {processing ? "Oluşturuluyor..." : "Sonuç"}
                   </h2>
+                  {!processing && (
+                    <p className="text-zinc-500 mt-2 text-sm">
+                      Değiştirilen: {selectedParts.map(p => CLOTHING_PARTS.find(cp => cp.id === p)?.name).join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 <div className="max-w-4xl mx-auto">
@@ -461,13 +525,13 @@ export default function DressingRoom() {
                     <div className="grid grid-cols-3 gap-6">
                       {/* Original Character */}
                       <div>
-                        <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Orijinal</h4>
+                        <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">ORİJİNAL</h4>
                         <img src={selectedCharacter?.base_image} alt="" className="w-full aspect-[3/4] object-cover" />
                       </div>
                       
                       {/* Result */}
                       <div>
-                        <h4 className="text-xs font-mono text-primary mb-2 text-center">Sonuç</h4>
+                        <h4 className="text-xs font-mono text-primary mb-2 text-center">SONUÇ</h4>
                         <div className="relative">
                           <img src={resultImage} alt="Result" className="w-full aspect-[3/4] object-cover" />
                           <div className="absolute top-2 right-2 px-2 py-1 bg-success text-xs font-mono">
@@ -478,7 +542,7 @@ export default function DressingRoom() {
                       
                       {/* Outfit Used */}
                       <div>
-                        <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">Kombin</h4>
+                        <h4 className="text-xs font-mono text-zinc-500 mb-2 text-center">KOMBİN</h4>
                         <img src={outfitImage} alt="" className="w-full aspect-[3/4] object-cover" />
                       </div>
                     </div>
